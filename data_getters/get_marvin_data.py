@@ -1,6 +1,12 @@
 import requests
 import couchdb
-import datetime
+from datetime import datetime
+from itertools import repeat
+import pandas as pd
+import time
+
+milliseconds_in_hours = 3600000
+milliseconds_in_seconds = 1000
 
 endpoint = 'https://serv.amazingmarvin.com/api/'
 
@@ -18,16 +24,62 @@ couch = couchdb.Server('https://512940bf-6e0c-4d7b-884b-9fc66185836b-bluemix.clo
 couch.resource.credentials = (syncUser, syncPassword)
 serverDB = couch[syncDatabase]
 
-for id in serverDB:
-    if serverDB[id]['db'] == 'Tasks':
-        task = serverDB[id]
-        break
+all_tasks_df = pd.DataFrame()
 
-print (task)
+def get_parent_list(task, categories):
 
-name = task['title']
-estimate = task['timeEstimate'] / 3600000
-project = serverDB[task['parentId']]['title']
-category = serverDB[serverDB[task['parentId']]['parentId']]['title']
-start_time = datetime.datetime.fromtimestamp(task['times'][1] / 1000)
-end_time = datetime.datetime.fromtimestamp(task['times'][1] / 1000)
+    parent = [item for item in categories if item['_id'] == task['parentId']][0]
+    parent_list = [parent]
+
+    while parent['parentId'] != 'root':
+        parent = [item for item in categories if item['_id'] == parent['parentId']][0]
+        parent_list.append(parent)
+
+    return parent_list
+
+
+def parse_task(task, categories):
+    
+    parent_list = get_parent_list(task, categories)
+    
+    parent_sequence = '/'.join([o['title'] for o in parent_list])
+    
+    #If this, seems like calData may be the thing to get?
+    if task.get('times') is None:
+        start_time = None
+        end_time = None
+        duration = None
+    else:
+        start_time = None if len(task['times']) == 0 else \
+                datetime.fromtimestamp(task['times'][0] / milliseconds_in_seconds)
+
+        end_time = None if len(task['times']) == 0 else \
+            datetime.fromtimestamp(task['times'][1] / milliseconds_in_seconds),
+
+        duration = task['duration'] / milliseconds_in_hours
+
+    time_estimate = task.get('timeEstimate')
+    time_estimate = None if time_estimate is None else time_estimate / milliseconds_in_hours
+
+    return pd.DataFrame(data = {
+            'name': [task['title']],
+            'time_estimate': [time_estimate],
+            'parent': [parent_sequence],
+            'category': [parent_list[-1]['title']],
+            'start_time': [start_time],
+            'end_time': [end_time],
+            'duration': [duration]
+    })
+
+start = time.time()
+categories = list(serverDB.find({'selector': {'db': 'Categories'}}))
+all_tasks = serverDB.find({'selector': {'db': 'Tasks'}})
+
+task_df_list = map(parse_task, all_tasks, repeat(categories))
+
+task_df = pd.concat(task_df_list)
+end = time.time()
+
+print (end - start)
+
+print ('foo')
