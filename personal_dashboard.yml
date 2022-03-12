@@ -1,0 +1,15 @@
+name: personal_dashboard
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python
+  - pandas
+  - requests
+  - python-couchdb
+  - dash
+  - plotly
+  - radian
+  - pip
+  - pip:
+    - mintapi
