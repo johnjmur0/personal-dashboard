@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import requests
 
-method = 'get_historical_data'
+method = 'get_historical_by_category'
 api_server_url = 'http://127.0.0.1:8000/'
 
 url = api_server_url + method
