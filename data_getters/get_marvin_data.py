@@ -51,10 +51,10 @@ def parse_task(task, categories):
         duration = None
     else:
         start_time = None if len(task['times']) == 0 else \
-                datetime.fromtimestamp(task['times'][0] / milliseconds_in_seconds)
+                pd.to_datetime(datetime.fromtimestamp(task['times'][0] / milliseconds_in_seconds))
 
         end_time = None if len(task['times']) == 0 else \
-            datetime.fromtimestamp(task['times'][1] / milliseconds_in_seconds),
+            pd.to_datetime(datetime.fromtimestamp(task['times'][1] / milliseconds_in_seconds))
 
         duration = task['duration'] / milliseconds_in_hours
 
@@ -63,6 +63,7 @@ def parse_task(task, categories):
 
     return pd.DataFrame(data = {
             'name': [task['title']],
+            'day': [task['day']],
             'time_estimate': [time_estimate],
             'parent': [parent_sequence],
             'category': [parent_list[-1]['title']],
@@ -78,6 +79,7 @@ all_tasks = serverDB.find({'selector': {'db': 'Tasks'}})
 task_df_list = map(parse_task, all_tasks, repeat(categories))
 
 task_df = pd.concat(task_df_list)
+task_df.to_csv('./temp_cache/marvin_tasks.csv', index=False)
 end = time.time()
 
 print (end - start)
