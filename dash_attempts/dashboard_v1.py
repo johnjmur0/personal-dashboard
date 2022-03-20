@@ -141,9 +141,10 @@ app.layout = html.Div([
                 options=finance_df['year'].unique(),
                 value=datetime.now().year,
                 clearable=False,
-                style= {'width': '50%', 'display': 'inline-block', 'float': 'left'}
             ),
-        ]),
+        ],
+            style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}
+        ),
 
         html.Div([
 
@@ -152,9 +153,10 @@ app.layout = html.Div([
                 options=list(range(1, 13)),
                 value=datetime.now().month,
                 clearable=False,
-                style= {'width': '50%', 'display': 'inline-block', 'float': 'right'}
             ),
-        ]),
+        ],
+            style= {'width': '25%', 'display': 'inline-block', 'float': 'right'}
+        ),
     ],
         style = {'display': 'flex'}
     ),
