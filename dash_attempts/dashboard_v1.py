@@ -134,41 +134,54 @@ def habit_tracker_scorecard(month, year):
 app.layout = html.Div([
 
     html.Div([
-        dcc.Dropdown(
-            id="finance_year_dropdown",
-            options=finance_df['year'].unique(),
-            value=datetime.now().year,
-            clearable=False,
-            style= {'width': '50%', 'justify-content': 'center'}
-        ),
-        dcc.Dropdown(
-            id="finance_month_dropdown",
-            options=list(range(1, 13)),
-            value=datetime.now().month,
-            clearable=False,
-            style= {'width': '50%', 'justify-content': 'center'}
-        ),
-    ]),
+
+        html.Div([
+            dcc.Dropdown(
+                id="finance_year_dropdown",
+                options=finance_df['year'].unique(),
+                value=datetime.now().year,
+                clearable=False,
+                style= {'width': '50%', 'display': 'inline-block', 'float': 'left'}
+            ),
+        ]),
+
+        html.Div([
+
+            dcc.Dropdown(
+                id="finance_month_dropdown",
+                options=list(range(1, 13)),
+                value=datetime.now().month,
+                clearable=False,
+                style= {'width': '50%', 'display': 'inline-block', 'float': 'right'}
+            ),
+        ]),
+    ],
+        style = {'display': 'flex'}
+    ),
 
     html.Div([
         dash_table.DataTable(id='habit_tracker_scorecard', data = []),
     ], 
-    style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}), 
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
+    ), 
 
     html.Div([
         dcc.Graph(id="monthly_finance_barchart"),
     ],
-    style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -100}),
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -100}
+    ),
     
     html.Div([
         dcc.Graph(id="monthly_task_piechart"),
     ], 
-    style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}), 
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
+    ), 
 
     html.Div([
         dcc.Graph(id="all_profit_loss_barchart", figure = all_profit_loss_barchart()),
     ],
-    style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -50}),  
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -50}
+    ),  
 ])
 
 app.run_server(debug=True)
