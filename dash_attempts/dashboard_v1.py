@@ -72,6 +72,14 @@ def monthly_finance_barchart(month, year):
 
     return fig
 
+@app.callback(
+    Output("total_free_cash", "figure"), 
+    Input("finance_month_dropdown", "value"), 
+    Input("finance_year_dropdown", "value"),
+    Input("savings_target", "value"))
+def total_free_cash(month, year, monthly_saving_target):
+    pass
+
 def all_profit_loss_barchart():
     
     finance_df['datetime'] = pd.to_datetime(finance_df[['year', 'month', 'day']])
@@ -157,6 +165,11 @@ app.layout = html.Div([
         ],
             style= {'width': '25%', 'display': 'inline-block', 'float': 'right'}
         ),
+
+        html.Div([
+            "Savings Target: ",
+            dcc.Input(id='monthly_saving_target', value=3000, type='number')
+    ])
     ],
         style = {'display': 'flex'}
     ),
