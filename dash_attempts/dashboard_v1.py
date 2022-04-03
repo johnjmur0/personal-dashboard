@@ -13,6 +13,17 @@ def format_task_df(task_df):
     task_df['month'] = task_df['day'].dt.month
     task_df['year'] = task_df['day'].dt.year
 
+    task_df[['sub_project_2', 'sub_project', 'main_category', 'main_category_dupe']] = task_df['parent'].str.split('/', expand = True)
+
+    aggregate_categories = ['Orsted', 'Edison Energy', 'Music']
+    task_df['end_val'] = np.where(
+        task_df['category'].isin(aggregate_categories), 
+        task_df['category'], 
+        task_df['sub_project_2'])
+
+    task_df.drop(columns = {'main_category_dupe', 'category', 'sub_project', 'sub_project_2', 'parent'}, inplace=True)
+    task_df.rename(columns = {'end_val': 'category'}, inplace=True)
+
     return task_df
 
 def format_exist_df(exist_df, key_habits):
@@ -73,12 +84,17 @@ def monthly_finance_barchart(month, year):
     return fig
 
 @app.callback(
-    Output("total_free_cash", "figure"), 
+    Output("total_free_cash", "children"), 
     Input("finance_month_dropdown", "value"), 
     Input("finance_year_dropdown", "value"),
     Input("savings_target", "value"))
 def total_free_cash(month, year, monthly_saving_target):
-    pass
+    month_sum_df = finance_df[~finance_df['category'].isin(['bonus', 'investment'])].groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
+    month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
+
+    month_sum_df = month_sum_df[~(month_sum_df['month'] != month) & (month_sum_df['year'] != year)]
+
+    return f'Free cash flow: {int(round(month_sum_df["free_cash"].sum(), -2))}'
 
 def all_profit_loss_barchart():
     
@@ -109,13 +125,10 @@ def all_profit_loss_barchart():
 def task_duration_piechart(month, year):
 
     filtered_df = task_df[(task_df['year'] == year) & (task_df['month'] == month)] 
-    grouped_df = filtered_df.groupby(['parent', 'category', 'year', 'month']).agg({'duration': 'sum'}).reset_index(drop = False)
+    grouped_df = filtered_df.groupby(['category', 'year', 'month']).agg({'duration': 'sum'}).reset_index(drop = False)
 
     if grouped_df['duration'].sum() == 0:
         grouped_df = pd.DataFrame()
-    else:
-        grouped_df[['sub-project_2', 'sub-project_1', 'project', 'category_dupe']] = grouped_df['parent'].str.split('/', expand = True)
-        grouped_df.drop(columns = {'category_dupe', 'parent'}, inplace=True)
 
     fig = px.pie(grouped_df, values = 'duration', names = 'category')
 
@@ -159,31 +172,35 @@ app.layout = html.Div([
             dcc.Dropdown(
                 id="finance_month_dropdown",
                 options=list(range(1, 13)),
-                value=datetime.now().month,
+                value=datetime.now().month - 1,
                 clearable=False,
             ),
         ],
             style= {'width': '25%', 'display': 'inline-block', 'float': 'right'}
         ),
-
-        html.Div([
-            "Savings Target: ",
-            dcc.Input(id='monthly_saving_target', value=3000, type='number')
-    ])
     ],
         style = {'display': 'flex'}
     ),
 
     html.Div([
+        "Savings Target: ",
+        dcc.Input(id='savings_target', value=3000, type='number')
+    ],
+        style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}    
+    ),
+
+    html.Div(id='total_free_cash'),
+
+    html.Div([
         dash_table.DataTable(id='habit_tracker_scorecard', data = []),
     ], 
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
+        style = {'width': '50%', 'marginTop': 50}
     ), 
 
     html.Div([
         dcc.Graph(id="monthly_finance_barchart"),
     ],
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -100}
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -330}
     ),
     
     html.Div([
