@@ -41,4 +41,7 @@ for index, row in attributes_df.iterrows():
     df['attribute'] = row['attribute']
     ret_df = pd.concat([ret_df, df])
 
+date_str = ret_df['date'].max()
+ret_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')
+
 print (ret_df)

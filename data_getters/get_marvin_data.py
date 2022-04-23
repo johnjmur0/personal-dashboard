@@ -27,8 +27,13 @@ serverDB = couch[syncDatabase]
 all_tasks_df = pd.DataFrame()
 
 def get_parent_list(task, categories):
-
-    parent = [item for item in categories if item['_id'] == task['parentId']][0]
+    
+    parent_val = [item for item in categories if item['_id'] == task['parentId']]
+    
+    if len(parent_val) == 0:
+        return []
+    
+    parent = parent_val[0]
     parent_list = [parent]
 
     while parent['parentId'] != 'root':
@@ -41,6 +46,9 @@ def get_parent_list(task, categories):
 def parse_task(task, categories):
     
     parent_list = get_parent_list(task, categories)
+
+    if len(parent_list) == 0:
+        return pd.DataFrame()
     
     parent_sequence = '/'.join([o['title'] for o in parent_list])
     
@@ -79,7 +87,9 @@ all_tasks = serverDB.find({'selector': {'db': 'Tasks'}})
 task_df_list = map(parse_task, all_tasks, repeat(categories))
 
 task_df = pd.concat(task_df_list)
-task_df.to_csv('./temp_cache/marvin_tasks.csv', index=False)
+task_df = task_df[task_df['day'] != 'unassigned']
+date_str = datetime.now().strftime('%Y-%m-%d')
+task_df.to_csv(f'./temp_cache/marvin_tasks_{date_str}.csv', index=False)
 end = time.time()
 
 print (end - start)

@@ -1,3 +1,7 @@
+from operator import index
+import os
+import glob
+from sys import prefix
 from dash import Dash, html, dcc, Input, Output, dash_table
 import plotly.express as px
 import pandas as pd
@@ -46,9 +50,35 @@ def format_exist_df(exist_df, key_habits):
 
     return habit_df
 
-finance_df = pd.read_csv('./temp_cache/daily_finances.csv', index_col=None)
-task_df = pd.read_csv('./temp_cache/marvin_tasks.csv', index_col=None)
-exist_df = pd.read_csv('./temp_cache/exist_data.csv', index_col=None)
+def get_latest_file(file_prefix):
+    cache_dir = './temp_cache'
+    files = glob.glob(f'{cache_dir}/{file_prefix}*')
+
+    latest_date = pd.to_datetime('1/1/2019')
+    for file in files:
+        file_name = os.path.basename(file)
+        split_filename = file_name.split('_')
+
+        if len(split_filename) < 3:
+            continue
+
+        date = pd.to_datetime(split_filename[2].replace('.csv', ''))
+        if date > latest_date:
+            latest_date = date.date()
+        
+    print (latest_date)
+    file_path = [x for x in files if latest_date.strftime('%Y-%m-%d') in x]
+
+    if len(file_path) == 0:
+        raise ValueError(f'No dated file for prefix {file_prefix}!')
+    
+    ret_df = pd.read_csv(file_path[0], index_col = None)
+    print (ret_df.head())
+    return ret_df
+    
+finance_df = get_latest_file(file_prefix = 'daily_finances')
+task_df = get_latest_file(file_prefix = 'marvin_tasks')
+exist_df = get_latest_file(file_prefix = 'exist_data')
 
 key_habits = pd.DataFrame( data = {
         'attribute': ['exercise', 'sleep_start', 'sleep_end', 'steps', 'free_in_am', 'got_outside', 'read', 'mood'],
@@ -89,6 +119,7 @@ def monthly_finance_barchart(month, year):
     Input("finance_year_dropdown", "value"),
     Input("savings_target", "value"))
 def total_free_cash(month, year, monthly_saving_target):
+    
     month_sum_df = finance_df[~finance_df['category'].isin(['bonus', 'investment'])].groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
     month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
 
