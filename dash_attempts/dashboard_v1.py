@@ -66,14 +66,12 @@ def get_latest_file(file_prefix):
         if date > latest_date:
             latest_date = date.date()
         
-    print (latest_date)
     file_path = [x for x in files if latest_date.strftime('%Y-%m-%d') in x]
 
     if len(file_path) == 0:
         raise ValueError(f'No dated file for prefix {file_prefix}!')
     
     ret_df = pd.read_csv(file_path[0], index_col = None)
-    print (ret_df.head())
     return ret_df
     
 finance_df = get_latest_file(file_prefix = 'daily_finances')
