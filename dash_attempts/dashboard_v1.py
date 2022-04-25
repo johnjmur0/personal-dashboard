@@ -2,13 +2,16 @@ from operator import index
 import os
 import glob
 from sys import prefix
+from tokenize import group
+import flask
 from dash import Dash, html, dcc, Input, Output, dash_table
 import plotly.express as px
 import pandas as pd
 import numpy as np
 from datetime import datetime
 
-app = Dash(__name__)
+server = flask.Flask(__name__)
+app = Dash(__name__, server = server)
 
 def format_task_df(task_df):
     
@@ -74,6 +77,14 @@ def get_latest_file(file_prefix):
     ret_df = pd.read_csv(file_path[0], index_col = None)
     return ret_df
     
+def get_month_sum_df(finance_df):
+
+    month_sum_df = finance_df[~finance_df['category'] \
+    .isin(['bonus', 'investment'])].groupby(['year', 'month']) \
+    .agg({'total': 'sum'}).reset_index(drop = False)
+    
+    return month_sum_df
+
 finance_df = get_latest_file(file_prefix = 'daily_finances')
 task_df = get_latest_file(file_prefix = 'marvin_tasks')
 exist_df = get_latest_file(file_prefix = 'exist_data')
@@ -118,12 +129,15 @@ def monthly_finance_barchart(month, year):
     Input("savings_target", "value"))
 def total_free_cash(month, year, monthly_saving_target):
     
-    month_sum_df = finance_df[~finance_df['category'].isin(['bonus', 'investment'])].groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
+    month_sum_df = get_month_sum_df(finance_df)
+
+    month_sum_df = month_sum_df[month_sum_df['year'] > 2018]
     month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
+    month_sum_df['free_cash'] = month_sum_df['free_cash'].cumsum()
 
-    month_sum_df = month_sum_df[~(month_sum_df['month'] != month) & (month_sum_df['year'] != year)]
+    month_sum_df = month_sum_df[(month_sum_df['month'] == month) & (month_sum_df['year'] == year)]
 
-    return f'Free cash flow: {int(round(month_sum_df["free_cash"].sum(), -2))}'
+    return f'Free cash flow: {int(round(month_sum_df["free_cash"].sum(), -1))}'
 
 def all_profit_loss_barchart():
     
@@ -148,6 +162,36 @@ def all_profit_loss_barchart():
     return fig
 
 @app.callback(
+    Output("monthly_free_cash_lineplot", "figure"),
+    Input("savings_target", "value"))
+def free_cashflow_line_plot(monthly_saving_target):
+
+    month_sum_df = get_month_sum_df(finance_df)
+    month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
+    month_sum_df['free_cash'] = month_sum_df['free_cash'].cumsum()
+    month_sum_df['day'] = 1
+    month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
+
+    fig = px.line(month_sum_df, x = 'datetime', y= 'free_cash')
+
+    return fig
+
+# @app.callback(
+#     Output("spending_category_piechart", "figure"))
+# def spending_category_piechart():
+
+#     grouped_df = filtered_df.groupby(['category', 'year', 'month']).agg({'duration': 'sum'}).reset_index(drop = False)
+
+#     if grouped_df['duration'].sum() == 0:
+#         grouped_df = pd.DataFrame()
+
+#     grouped_df = grouped_df[grouped_df['duration'] > 2]
+
+#     fig = px.pie(grouped_df, values = 'duration', names = 'category')
+
+#     return fig
+
+@app.callback(
     Output("monthly_task_piechart", "figure"), 
     Input("finance_month_dropdown", "value"), 
     Input("finance_year_dropdown", "value"))
@@ -158,6 +202,8 @@ def task_duration_piechart(month, year):
 
     if grouped_df['duration'].sum() == 0:
         grouped_df = pd.DataFrame()
+
+    grouped_df = grouped_df[grouped_df['duration'] > 2]
 
     fig = px.pie(grouped_df, values = 'duration', names = 'category')
 
@@ -176,7 +222,11 @@ def habit_tracker_scorecard(month, year):
     daily_total_df['day'] = 1
     daily_total_df['datetime'] = pd.to_datetime(daily_total_df[['year', 'month', 'day']])
     daily_total_df['total'] = len(key_habits)
-    daily_total_df['month_days'] = daily_total_df['datetime'].dt.daysinmonth
+
+    if month == datetime.now().month and year == datetime.now().year:
+        daily_total_df['month_days'] = datetime.now().day - 1
+    else:    
+        daily_total_df['month_days'] = daily_total_df['datetime'].dt.daysinmonth
 
     display_df = daily_total_df[['attribute', 'achieved', 'month_days']]
     return display_df.to_dict('records'), [{"name": i, "id": i} for i in display_df.columns]
@@ -243,6 +293,13 @@ app.layout = html.Div([
     ],
         style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -50}
     ),  
+
+    html.Div([
+        dcc.Graph(id="monthly_free_cash_lineplot"),
+    ],
+        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
+    ),  
 ])
 
-app.run_server(debug=True)
+if __name__ == '__main__':
+    app.run_server(debug=True)
