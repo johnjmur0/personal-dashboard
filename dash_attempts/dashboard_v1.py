@@ -5,6 +5,7 @@ from sys import prefix
 from tokenize import group
 import flask
 from dash import Dash, html, dcc, Input, Output, dash_table
+import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 import numpy as np
@@ -100,15 +101,25 @@ habit_df = format_exist_df(exist_df, key_habits)
 @app.callback(
     Output("monthly_finance_barchart", "figure"), 
     Input("finance_month_dropdown", "value"), 
-    Input("finance_year_dropdown", "value"))
-def monthly_finance_barchart(month, year):
+    Input("finance_year_dropdown", "value"),
+    Input("savings_target", "value"),
+    Input("housing_payment", "value"))
+def monthly_finance_barchart(month, year, savings_target, housing_payment):
     
     filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)].groupby('category').agg({'total': 'sum'}).reset_index(drop = False)
     
+    general_budget = pd.DataFrame(data = {
+        'category': ['housing', 'groceries', 'discretionary'],
+        'budget': [housing_payment * -1.05, -400, savings_target + (housing_payment * -1.05 - 400)]
+    })
+
+    filter_df = filter_df.merge(general_budget, how = 'left', on = 'category')
+
     sum_df = pd.DataFrame(data = {
         'year': [year],
         'month': [month],
         'category': 'profit/loss',
+        'budget': [savings_target],
         'total': [filter_df['total'].sum()]
     })
 
@@ -116,7 +127,11 @@ def monthly_finance_barchart(month, year):
     
     filter_df = filter_df[abs(filter_df['total']) > 100]
 
-    fig = px.bar(filter_df, x='category', y='total', text_auto = '.2s')
+    filter_df = pd.melt(filter_df, id_vars = ['category', 'year', 'month'], value_vars = ['total', 'budget'])
+
+    fig = px.bar(filter_df, x='category', y='value', color='variable', barmode = 'group', text_auto = '.2s', 
+                    color_discrete_sequence = ['blue', 'grey'])
+
     fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
     fig.update_layout(yaxis_title=None, xaxis_title = None)
 
@@ -176,21 +191,6 @@ def free_cashflow_line_plot(monthly_saving_target):
 
     return fig
 
-# @app.callback(
-#     Output("spending_category_piechart", "figure"))
-# def spending_category_piechart():
-
-#     grouped_df = filtered_df.groupby(['category', 'year', 'month']).agg({'duration': 'sum'}).reset_index(drop = False)
-
-#     if grouped_df['duration'].sum() == 0:
-#         grouped_df = pd.DataFrame()
-
-#     grouped_df = grouped_df[grouped_df['duration'] > 2]
-
-#     fig = px.pie(grouped_df, values = 'duration', names = 'category')
-
-#     return fig
-
 @app.callback(
     Output("monthly_task_piechart", "figure"), 
     Input("finance_month_dropdown", "value"), 
@@ -231,7 +231,10 @@ def habit_tracker_scorecard(month, year):
     display_df = daily_total_df[['attribute', 'achieved', 'month_days']]
     return display_df.to_dict('records'), [{"name": i, "id": i} for i in display_df.columns]
 
-app.layout = html.Div([
+
+finance_only = True
+
+all_div = html.Div([
 
     html.Div([
 
@@ -271,6 +274,13 @@ app.layout = html.Div([
     html.Div(id='total_free_cash'),
 
     html.Div([
+        "Housing Payment: ",
+        dcc.Input(id='housing_payment', value=1700, type='number')
+    ],
+        style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}    
+    ),
+
+    html.Div([
         dash_table.DataTable(id='habit_tracker_scorecard', data = []),
     ], 
         style = {'width': '50%', 'marginTop': 50}
@@ -300,6 +310,90 @@ app.layout = html.Div([
         style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
     ),  
 ])
+
+finance_only_div = html.Div([
+
+    html.Div([
+
+        html.Div([
+            dcc.Dropdown(
+                id="finance_year_dropdown",
+                options=finance_df['year'].unique(),
+                value=datetime.now().year,
+                clearable=False,
+            ),
+        ],
+            style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}
+        ),
+
+        html.Div([
+
+            dcc.Dropdown(
+                id="finance_month_dropdown",
+                options=list(range(1, 13)),
+                value=datetime.now().month,
+                clearable=False,
+            ),
+        ],
+            style= {'width': '49%', 'display': 'inline-block', 'float': 'right'}
+        ),
+    ],
+        style = {'width': '49%', 'display': 'flex', 'float': 'left'}
+    ),
+
+    html.Div([
+
+        dbc.Col([
+
+            html.Div([
+                "Savings Target: ", dcc.Input(id='savings_target', value=3000, type='number')
+            ],
+                style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}    
+            ), 
+
+            html.Div([
+                "Housing Payment: ", dcc.Input(id='housing_payment', value=1700, type='number')
+            ],
+                style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}    
+            ), 
+
+        ],
+            style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}
+        ),
+
+        html.Div([
+
+            html.Div(id='total_free_cash', style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}),  
+ 
+        ],
+            style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}
+        ),
+    ],
+        #style = {'textAlign': 'right'}
+    )
+
+    # html.Div([
+    #     dcc.Graph(id="monthly_finance_barchart"),
+    # ],
+    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': 0}
+    # ),
+
+    # html.Div([
+    #     dcc.Graph(id="all_profit_loss_barchart", figure = all_profit_loss_barchart()),
+    # ],
+    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': 0}
+    # ),  
+
+    # html.Div([
+    #     dcc.Graph(id="monthly_free_cash_lineplot"),
+    # ],
+    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
+    # ), 
+])
+
+layout = finance_only_div if finance_only else all_div
+
+app.layout = layout
 
 if __name__ == '__main__':
     app.run_server(debug=True)
