@@ -87,6 +87,7 @@ def get_month_sum_df(finance_df):
     return month_sum_df
 
 finance_df = get_latest_file(file_prefix = 'daily_finances')
+account_df = get_latest_file(file_prefix = 'account_totals')
 task_df = get_latest_file(file_prefix = 'marvin_tasks')
 exist_df = get_latest_file(file_prefix = 'exist_data')
 
@@ -217,9 +218,8 @@ def monthly_finance_barchart(month, year, profit_target, housing_payment):
 @app.callback(
     Output("avg_category_piechart", "figure"), 
     Input("profit_target", "value"),
-    Input("housing_payment", "value"),
     Input("historical_start_year", "value"))
-def avg_category_piechart(profit_target, housing_payment, historical_start_year):
+def avg_category_piechart(profit_target, historical_start_year):
     
     month_sum_df = get_month_sum_df(finance_df)
 
@@ -241,7 +241,7 @@ def avg_category_piechart(profit_target, housing_payment, historical_start_year)
         ]).groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
 
     avg_df = avg_df[~avg_df['category'].isin(['bonus', 'loans', 'music', 'free_cash'])]
-    avg_df.loc[avg_df['category'] == 'housing', ['total']] = housing_payment
+    #avg_df.loc[avg_df['category'] == 'housing', ['total']] = housing_payment
     avg_df['income'] = list(avg_df[avg_df['category'] == 'income']['total'])[0]
 
     avg_df['percentage'] = abs(avg_df['total'] / avg_df['income'])
@@ -252,6 +252,8 @@ def avg_category_piechart(profit_target, housing_payment, historical_start_year)
     return fig
 
 @app.callback(
+    Output("accounts_table", "data"),
+    Output("accounts_table", "columns"), 
     Input("profit_target", "value"),
     Input("housing_payment", "value"),
     Input("saving_months", "value"),
@@ -263,7 +265,36 @@ def accounts_table(profit_target, housing_payment, saving_months, historical_sta
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
     month_sum_df['free_cash'] = month_sum_df['total'] - profit_target
 
-# html.Div([dash_table.DataTable(id='habit_tracker_scorecard', data = [])]), 
+    pivot_account_df = pd.pivot_table(account_df[['account_type', 'total']], values = 'total', columns = ['account_type'])
+    pivot_account_df['bank'] = pivot_account_df['bank'] + pivot_account_df['credit']
+    pivot_account_df.drop(columns = ['credit', 'loan'], inplace = True)
+    
+    avg_spend_df = finance_df[finance_df['year'] >= historical_start_year] \
+        .groupby(['year', 'month', 'category']).agg({'total': 'sum'}) \
+        .groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
+    
+    avg_spend_df = avg_spend_df[~avg_spend_df['category'].isin(['loans', 'housing', 'bonus'])]
+
+    monthly_df = avg_spend_df[avg_spend_df['category'].isin(['income', 'investments'])].pivot_table(values = 'total', columns = 'category')\
+        .reset_index(drop = True)
+        
+    monthly_df['spending'] = avg_spend_df.loc[avg_spend_df['category'].isin(['discretionary', 'groceries']), ['total']].sum()[0]
+
+    monthly_df['housing'] = housing_payment * -1
+    monthly_df['savings'] = monthly_df['income'] + monthly_df['spending'] + monthly_df['investments'] + monthly_df['housing']
+
+    final_df = pd.concat([pivot_account_df.reset_index(drop = True), monthly_df.reset_index(drop = True)], axis = 1)
+
+    final_df['excess_savings'] = final_df['bank'] + (final_df['housing'] + final_df['spending'] + final_df['investments']) * saving_months
+
+    final_df = pd.melt(final_df, id_vars = [], value_vars = ['bank', 'investment', 'income', 'spending', 'housing', 'savings',  'investments', 'excess_savings'])
+    
+    format_dict = {'total':'${0:,.0f}'}
+    final_df['total'] =  round(final_df['value'], -1)
+    final_df.drop(columns = ['value'], inplace = True)
+    final_df = final_df.apply(lambda x: [f'${y:,.0f}'for y in x] if x.name=='total' else x)
+
+    return final_df.to_dict('records'), [{"name": i, "id": i} for i in final_df.columns]
 
 year_dropdown = dcc.Dropdown(
                     id="finance_year_dropdown",
@@ -325,6 +356,18 @@ app.layout = dbc.Container([
             html.Div([dcc.Graph(id="avg_category_piechart")]),
             width = {'size': 6}
         )
+    ],
+        justify="evenly",
+        className = 'g-0'
+    ),
+
+    #html.Div([dash_table.DataTable(id = 'accounts_table', data = [])]),
+    dbc.Row(
+    [
+        dbc.Col(
+            html.Div([dash_table.DataTable(id = 'accounts_table', data = [])]),
+            width = {'size': 3}
+        ),
     ],
         justify="evenly",
         className = 'g-0'
