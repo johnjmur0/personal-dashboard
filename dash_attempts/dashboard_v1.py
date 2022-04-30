@@ -12,7 +12,7 @@ import numpy as np
 from datetime import datetime
 
 server = flask.Flask(__name__)
-app = Dash(__name__, server = server)
+app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 def format_task_df(task_df):
     
@@ -98,62 +98,6 @@ key_habits = pd.DataFrame( data = {
 task_df = format_task_df(task_df)
 habit_df = format_exist_df(exist_df, key_habits)
 
-@app.callback(
-    Output("monthly_finance_barchart", "figure"), 
-    Input("finance_month_dropdown", "value"), 
-    Input("finance_year_dropdown", "value"),
-    Input("savings_target", "value"),
-    Input("housing_payment", "value"))
-def monthly_finance_barchart(month, year, savings_target, housing_payment):
-    
-    filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)].groupby('category').agg({'total': 'sum'}).reset_index(drop = False)
-    
-    general_budget = pd.DataFrame(data = {
-        'category': ['housing', 'groceries', 'discretionary'],
-        'budget': [housing_payment * -1.05, -400, savings_target + (housing_payment * -1.05 - 400)]
-    })
-
-    filter_df = filter_df.merge(general_budget, how = 'left', on = 'category')
-
-    sum_df = pd.DataFrame(data = {
-        'year': [year],
-        'month': [month],
-        'category': 'profit/loss',
-        'budget': [savings_target],
-        'total': [filter_df['total'].sum()]
-    })
-
-    filter_df = pd.concat([filter_df, sum_df])
-    
-    filter_df = filter_df[abs(filter_df['total']) > 100]
-
-    filter_df = pd.melt(filter_df, id_vars = ['category', 'year', 'month'], value_vars = ['total', 'budget'])
-
-    fig = px.bar(filter_df, x='category', y='value', color='variable', barmode = 'group', text_auto = '.2s', 
-                    color_discrete_sequence = ['blue', 'grey'])
-
-    fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
-    fig.update_layout(yaxis_title=None, xaxis_title = None)
-
-    return fig
-
-@app.callback(
-    Output("total_free_cash", "children"), 
-    Input("finance_month_dropdown", "value"), 
-    Input("finance_year_dropdown", "value"),
-    Input("savings_target", "value"))
-def total_free_cash(month, year, monthly_saving_target):
-    
-    month_sum_df = get_month_sum_df(finance_df)
-
-    month_sum_df = month_sum_df[month_sum_df['year'] > 2018]
-    month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
-    month_sum_df['free_cash'] = month_sum_df['free_cash'].cumsum()
-
-    month_sum_df = month_sum_df[(month_sum_df['month'] == month) & (month_sum_df['year'] == year)]
-
-    return f'Free cash flow: {int(round(month_sum_df["free_cash"].sum(), -1))}'
-
 def all_profit_loss_barchart():
     
     finance_df['datetime'] = pd.to_datetime(finance_df[['year', 'month', 'day']])
@@ -178,7 +122,7 @@ def all_profit_loss_barchart():
 
 @app.callback(
     Output("monthly_free_cash_lineplot", "figure"),
-    Input("savings_target", "value"))
+    Input("profit_target", "value"))
 def free_cashflow_line_plot(monthly_saving_target):
 
     month_sum_df = get_month_sum_df(finance_df)
@@ -231,169 +175,163 @@ def habit_tracker_scorecard(month, year):
     display_df = daily_total_df[['attribute', 'achieved', 'month_days']]
     return display_df.to_dict('records'), [{"name": i, "id": i} for i in display_df.columns]
 
-
-finance_only = True
-
-all_div = html.Div([
-
-    html.Div([
-
-        html.Div([
-            dcc.Dropdown(
-                id="finance_year_dropdown",
-                options=finance_df['year'].unique(),
-                value=datetime.now().year,
-                clearable=False,
-            ),
-        ],
-            style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}
-        ),
-
-        html.Div([
-
-            dcc.Dropdown(
-                id="finance_month_dropdown",
-                options=list(range(1, 13)),
-                value=datetime.now().month - 1,
-                clearable=False,
-            ),
-        ],
-            style= {'width': '25%', 'display': 'inline-block', 'float': 'right'}
-        ),
-    ],
-        style = {'display': 'flex'}
-    ),
-
-    html.Div([
-        "Savings Target: ",
-        dcc.Input(id='savings_target', value=3000, type='number')
-    ],
-        style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}    
-    ),
-
-    html.Div(id='total_free_cash'),
-
-    html.Div([
-        "Housing Payment: ",
-        dcc.Input(id='housing_payment', value=1700, type='number')
-    ],
-        style= {'width': '25%', 'display': 'inline-block', 'float': 'left'}    
-    ),
-
-    html.Div([
-        dash_table.DataTable(id='habit_tracker_scorecard', data = []),
-    ], 
-        style = {'width': '50%', 'marginTop': 50}
-    ), 
-
-    html.Div([
-        dcc.Graph(id="monthly_finance_barchart"),
-    ],
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -330}
-    ),
+@app.callback(
+    Output("monthly_finance_barchart", "figure"), 
+    Input("finance_month_dropdown", "value"), 
+    Input("finance_year_dropdown", "value"),
+    Input("profit_target", "value"),
+    Input("housing_payment", "value"))
+def monthly_finance_barchart(month, year, profit_target, housing_payment):
     
-    html.Div([
-        dcc.Graph(id="monthly_task_piechart"),
-    ], 
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
-    ), 
+    filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)].groupby('category').agg({'total': 'sum'}).reset_index(drop = False)
+    
+    general_budget = pd.DataFrame(data = {
+        'category': ['housing', 'groceries', 'discretionary'],
+        'budget': [housing_payment * -1.05, -400, (profit_target + (housing_payment * -1.05 - 400)) * -1]
+    })
 
-    html.Div([
-        dcc.Graph(id="all_profit_loss_barchart", figure = all_profit_loss_barchart()),
+    filter_df = filter_df.merge(general_budget, how = 'left', on = 'category')
+
+    sum_df = pd.DataFrame(data = {
+        'year': [year],
+        'month': [month],
+        'category': 'profit/loss',
+        'budget': [profit_target],
+        'total': [filter_df['total'].sum()]
+    })
+
+    filter_df = pd.concat([filter_df, sum_df])
+    
+    filter_df = filter_df[abs(filter_df['total']) > 100]
+
+    filter_df = pd.melt(filter_df, id_vars = ['category', 'year', 'month'], value_vars = ['total', 'budget'])
+
+    fig = px.bar(filter_df, x='category', y='value', color='variable', barmode = 'group', text_auto = '.2s', 
+                    color_discrete_sequence = ['blue', 'grey'])
+
+    fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
+    fig.update_layout(yaxis_title=None, xaxis_title = None)
+
+    return fig
+
+@app.callback(
+    Output("avg_category_piechart", "figure"), 
+    Input("profit_target", "value"),
+    Input("housing_payment", "value"),
+    Input("historical_start_year", "value"))
+def avg_category_piechart(profit_target, housing_payment, historical_start_year):
+    
+    month_sum_df = get_month_sum_df(finance_df)
+
+    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
+    month_sum_df['free_cash'] = month_sum_df['total'] - profit_target
+
+    month_sum_df = pd.melt(month_sum_df, id_vars = ['year', 'month'], value_vars = ['total', 'free_cash'])
+    month_sum_df.rename(columns = {'variable': 'category', 'value': 'total'}, inplace = True)
+    month_sum_df.loc[month_sum_df['category'] == 'total', ['category']] = 'saving'
+
+    historical_df = finance_df[
+        (finance_df['year'] >= historical_start_year) & 
+        ~((finance_df['year'] == datetime.now().year) & (finance_df['month'] == datetime.now().month))]
+
+    avg_df = pd.concat(
+        [
+            historical_df.groupby(['year', 'month', 'category']).agg({'total': 'sum'}).reset_index(drop = False),
+            month_sum_df
+        ]).groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
+
+    avg_df = avg_df[~avg_df['category'].isin(['bonus', 'loans', 'music', 'free_cash'])]
+    avg_df.loc[avg_df['category'] == 'housing', ['total']] = housing_payment
+    avg_df['income'] = list(avg_df[avg_df['category'] == 'income']['total'])[0]
+
+    avg_df['percentage'] = abs(avg_df['total'] / avg_df['income'])
+    avg_df = avg_df[avg_df['category'] != 'income']
+
+    fig = px.pie(avg_df, values = 'percentage', names = 'category')
+
+    return fig
+
+@app.callback(
+    Input("profit_target", "value"),
+    Input("housing_payment", "value"),
+    Input("saving_months", "value"),
+    Input("historical_start_year", "value"))
+def accounts_table(profit_target, housing_payment, saving_months, historical_start_year):
+
+    month_sum_df = get_month_sum_df(finance_df)
+
+    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
+    month_sum_df['free_cash'] = month_sum_df['total'] - profit_target
+
+# html.Div([dash_table.DataTable(id='habit_tracker_scorecard', data = [])]), 
+
+year_dropdown = dcc.Dropdown(
+                    id="finance_year_dropdown",
+                    options=finance_df['year'].unique(),
+                    value=datetime.now().year,
+                    clearable=False)
+
+month_dropdown = dcc.Dropdown(
+                    id="finance_month_dropdown",
+                    options=list(range(1, 13)),
+                    value=datetime.now().month,
+                    clearable=False)
+
+app.layout = dbc.Container([
+
+    dbc.Row(
+    [
+        dbc.Col(html.Div(year_dropdown), width = {'size': 3 }),
+        dbc.Col(html.Div(month_dropdown), width = {'size': 3 }),
+
+        dbc.Col(
+            html.Div(["Profit Target: ", dcc.Input(id='profit_target', value=3000, type='number')]),
+            style = {'textAlign': 'right'},
+            width = {'size': 2 }),
+
+        dbc.Col(
+            html.Div(["Housing Payment: ", dcc.Input(id='housing_payment', value=1700, type='number')]), 
+            style = {'textAlign': 'right'},
+            width = {'size': 2 }),
+
+        dbc.Col(
+            html.Div(["Savings (Months): ", dcc.Input(id='saving_months', value=6, type='number')]), 
+            style = {'textAlign': 'right'},
+            width = {'size': 2 })
     ],
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': -50}
-    ),  
-
-    html.Div([
-        dcc.Graph(id="monthly_free_cash_lineplot"),
-    ],
-        style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
-    ),  
-])
-
-finance_only_div = html.Div([
-
-    html.Div([
-
-        html.Div([
-            dcc.Dropdown(
-                id="finance_year_dropdown",
-                options=finance_df['year'].unique(),
-                value=datetime.now().year,
-                clearable=False,
-            ),
-        ],
-            style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}
-        ),
-
-        html.Div([
-
-            dcc.Dropdown(
-                id="finance_month_dropdown",
-                options=list(range(1, 13)),
-                value=datetime.now().month,
-                clearable=False,
-            ),
-        ],
-            style= {'width': '49%', 'display': 'inline-block', 'float': 'right'}
-        ),
-    ],
-        style = {'width': '49%', 'display': 'flex', 'float': 'left'}
+        justify="evenly",
+        className = 'g-0'
     ),
 
-    html.Div([
-
-        dbc.Col([
-
-            html.Div([
-                "Savings Target: ", dcc.Input(id='savings_target', value=3000, type='number')
-            ],
-                style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}    
-            ), 
-
-            html.Div([
-                "Housing Payment: ", dcc.Input(id='housing_payment', value=1700, type='number')
-            ],
-                style= {'width': '49%', 'display': 'inline-block', 'float': 'left'}    
-            ), 
-
-        ],
-            style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}
-        ),
-
-        html.Div([
-
-            html.Div(id='total_free_cash', style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}),  
- 
-        ],
-            style = {'width': '49%', 'display': 'inline-block', 'float': 'right'}
-        ),
+    dbc.Row(
+    [
+        dbc.Col(
+            html.Div(["Historical Start Year: ", dcc.Input(id='historical_start_year', value=2019, type='number')]),
+            style = {'textAlign': 'right'},
+            width = {'size': 2, 'offset': 6}),
     ],
-        #style = {'textAlign': 'right'}
+        justify="evenly",
+        className = 'g-0'
+    ),    
+
+    dbc.Row(
+    [
+        dbc.Col(
+            html.Div([dcc.Graph(id="monthly_finance_barchart")]),
+            width = {'size': 6}
+        ),
+
+        dbc.Col(
+            html.Div([dcc.Graph(id="avg_category_piechart")]),
+            width = {'size': 6}
+        )
+    ],
+        justify="evenly",
+        className = 'g-0'
     )
-
-    # html.Div([
-    #     dcc.Graph(id="monthly_finance_barchart"),
-    # ],
-    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': 0}
-    # ),
-
-    # html.Div([
-    #     dcc.Graph(id="all_profit_loss_barchart", figure = all_profit_loss_barchart()),
-    # ],
-    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'right', 'marginTop': 0}
-    # ),  
-
-    # html.Div([
-    #     dcc.Graph(id="monthly_free_cash_lineplot"),
-    # ],
-    #     style = {'width': '50%', 'display': 'inline-block', 'float': 'left', 'marginTop': 0}
-    # ), 
-])
-
-layout = finance_only_div if finance_only else all_div
-
-app.layout = layout
+],
+    fluid = True
+)
 
 if __name__ == '__main__':
     app.run_server(debug=True)
