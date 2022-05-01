@@ -136,17 +136,29 @@ def savings_line_plot(monthly_saving_target, historical_start_year):
     fig.add_shape(
         type='line',
         x0 = month_sum_df['datetime'].min(),
-        y0 = monthly_saving_target,
+        y0 = int(monthly_saving_target),
         x1 = month_sum_df['datetime'].max(),
-        y1 = monthly_saving_target,
+        y1 = int(monthly_saving_target),
         line = dict(color='Black',),
         xref = 'x',
         yref = 'y')
 
+    monthly_income = finance_df[
+        (finance_df['month'] == month_sum_df['datetime'].max().month - 1) & 
+        (finance_df['year'] == month_sum_df['datetime'].max().year) & 
+        (finance_df['category'] == 'income')]['total'].sum()
+
+    avg_spend = finance_df[
+        (finance_df['year'] >= historical_start_year) & 
+        ~(finance_df['category'].isin(['income', 'bonus']))] \
+        .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)['total'].mean()
+
+    shortfall = (avg_spend + monthly_income) - monthly_saving_target
+
     fig.add_annotation(
         x = month_sum_df['datetime'].median(), 
         y = month_sum_df['total'].max() * 1.1,
-        text = f"Avg. monthly savings: ${int(round(month_sum_df['total'].mean(), -1))}",
+        text = f"Avg. profit diff: ${int(round(shortfall, -1))}",
         showarrow = False,    
         font = dict(size=18),
         yshift = 0)
@@ -155,18 +167,46 @@ def savings_line_plot(monthly_saving_target, historical_start_year):
 
 @app.callback(
     Output("spending_line_plot", "figure"),
+    Input("profit_target", "value"),
     Input("historical_start_year", "value"))
-def spending_line_plot(historical_start_year):
+def spending_line_plot(profit_target, historical_start_year):
 
     month_spend_df = finance_df[
         (finance_df['year'] >= historical_start_year) & 
         ~(finance_df['category'].isin(['income', 'bonus']))] \
         .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
-    
+
     month_spend_df['day'] = 1
     month_spend_df['datetime'] = pd.to_datetime(month_spend_df[['year', 'month', 'day']])
 
+    monthly_income = finance_df[
+        (finance_df['month'] == month_spend_df['datetime'].max().month - 1) & 
+        (finance_df['year'] == month_spend_df['datetime'].max().year) & 
+        (finance_df['category'] == 'income')]['total'].sum()
+        
+    monthly_spending_target = (monthly_income - profit_target) * -1
+    avg_spending_diff = month_spend_df['total'].mean() - monthly_spending_target
     fig = px.line(month_spend_df, x = 'datetime', y= 'total')
+
+    fig.add_shape(
+        type='line',
+        x0 = month_spend_df['datetime'].min(),
+        y0 = int(monthly_spending_target),
+        x1 = month_spend_df['datetime'].max(),
+        y1 = int(monthly_spending_target),
+        line = dict(color='Black',),
+        xref = 'x',
+        yref = 'y')
+
+    fig.add_annotation(
+        x = month_spend_df['datetime'].median(), 
+        y = month_spend_df['total'].max() * 1.1,
+        text = f"Avg. spending diff: ${int(round(avg_spending_diff, -1))}",
+        showarrow = False,    
+        font = dict(size=18),
+        yshift = 0)
+
+
     return fig
 
 @app.callback(
@@ -251,16 +291,15 @@ def monthly_finance_barchart(month, year, profit_target, housing_payment):
 
 @app.callback(
     Output("avg_category_piechart", "figure"), 
-    Input("profit_target", "value"),
+    Input("housing_payment", "value"),
     Input("historical_start_year", "value"))
-def avg_category_piechart(profit_target, historical_start_year):
+def avg_category_piechart(housing_payment, historical_start_year):
     
     month_sum_df = get_month_sum_df(finance_df)
 
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
-    month_sum_df['free_cash'] = month_sum_df['total'] - profit_target
 
-    month_sum_df = pd.melt(month_sum_df, id_vars = ['year', 'month'], value_vars = ['total', 'free_cash'])
+    month_sum_df = pd.melt(month_sum_df, id_vars = ['year', 'month'], value_vars = ['total'])
     month_sum_df.rename(columns = {'variable': 'category', 'value': 'total'}, inplace = True)
     month_sum_df.loc[month_sum_df['category'] == 'total', ['category']] = 'saving'
 
@@ -272,8 +311,12 @@ def avg_category_piechart(profit_target, historical_start_year):
         .groupby(['year', 'month', 'category']).agg({'total': 'sum'}) \
         .groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
     
-    avg_savings = month_sum_df[month_sum_df['category'] == 'saving']['total'].mean()
+    housing_adder = housing_payment - avg_df[avg_df['category'] == 'housing']['total'].sum()
+    avg_savings = month_sum_df[month_sum_df['category'] == 'saving']['total'].mean() + housing_adder
+
     avg_df = avg_df[~(avg_df['category'].isin(['bonus', 'loans', 'music']))]
+    avg_df.loc[avg_df['category'] == 'housing', ['total']] = housing_payment
+
     avg_df = pd.concat([avg_df, pd.DataFrame(data = {'category': ['savings'], 'total': [avg_savings] })])
     avg_df['total'] = abs(avg_df['total'])
     avg_df = avg_df[avg_df['category'] != 'income']
@@ -316,9 +359,11 @@ def accounts_table(profit_target, housing_payment, saving_months, historical_sta
 
     final_df = pd.concat([pivot_account_df.reset_index(drop = True), monthly_df.reset_index(drop = True)], axis = 1)
 
-    final_df['excess_savings'] = final_df['bank'] + (final_df['housing'] + final_df['spending'] + final_df['investments']) * saving_months
+    final_df['cash savings'] = (final_df['housing'] + final_df['spending'] + final_df['investments']) * saving_months * -1
+    final_df['excess savings'] = final_df['bank'] - final_df['cash savings']
 
-    final_df = pd.melt(final_df, id_vars = [], value_vars = ['bank', 'investment', 'income', 'spending', 'housing', 'savings',  'investments', 'excess_savings'])
+    final_cols = ['bank', 'investment', 'cash savings', 'excess savings', 'income', 'spending', 'housing', 'savings',  'investments']
+    final_df = pd.melt(final_df, id_vars = [], value_vars = final_cols)
     
     final_df['total'] =  round(final_df['value'], -1)
     final_df.drop(columns = ['value'], inplace = True)
@@ -366,7 +411,7 @@ app.layout = dbc.Container([
     dbc.Row(
         [
             dbc.Col(
-                html.Div(["Savings (Months): ", dcc.Input(id='saving_months', value=6, type='number')]), 
+                html.Div(["Savings (Months): ", dcc.Input(id='saving_months', value=8, type='number')]), 
                 style = {'textAlign': 'right'},
                 width = {'size': 2 }),
 
@@ -399,16 +444,17 @@ app.layout = dbc.Container([
 
         dbc.Col(
             html.Div([dcc.Graph(id="savings_line_plot")]),
-            width = {'size': 4 }
+            width = {'size': 5 }
         ),
 
         dbc.Col(
             html.Div([dcc.Graph(id="spending_line_plot")]),
-            width = {'size': 4 }
+            width = {'size': 5 }
         )
     ],
-        justify="evenly",
-        align = 'center'
+        justify = "evenly",
+        align = 'center',
+        className = 'g-0'
     )
 ],
     fluid = True

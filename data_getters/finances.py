@@ -41,5 +41,5 @@ def get_current_accounts(user_name = 'jjm'):
     return ret_df
 
 if __name__ == '__main__':
-    get_current_accounts()
+    get_mint_historical_data(False)
         
