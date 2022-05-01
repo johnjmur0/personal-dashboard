@@ -161,7 +161,7 @@ def spending_line_plot(historical_start_year):
     month_spend_df = finance_df[
         (finance_df['year'] >= historical_start_year) & 
         ~(finance_df['category'].isin(['income', 'bonus']))] \
-        .groupby(['year', 'month']).agg({'total': 'sum'}) 
+        .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
     
     month_spend_df['day'] = 1
     month_spend_df['datetime'] = pd.to_datetime(month_spend_df[['year', 'month', 'day']])
