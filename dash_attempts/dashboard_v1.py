@@ -122,18 +122,51 @@ def all_profit_loss_barchart():
     return fig
 
 @app.callback(
-    Output("monthly_free_cash_lineplot", "figure"),
-    Input("profit_target", "value"))
-def free_cashflow_line_plot(monthly_saving_target):
+    Output("savings_line_plot", "figure"),
+    Input("profit_target", "value"),
+    Input("historical_start_year", "value"))
+def savings_line_plot(monthly_saving_target, historical_start_year):
 
     month_sum_df = get_month_sum_df(finance_df)
-    month_sum_df['free_cash'] = month_sum_df['total'] - monthly_saving_target
-    month_sum_df['free_cash'] = month_sum_df['free_cash'].cumsum()
+    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
     month_sum_df['day'] = 1
     month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
 
-    fig = px.line(month_sum_df, x = 'datetime', y= 'free_cash')
+    fig = px.line(month_sum_df, x = 'datetime', y= 'total')
+    fig.add_shape(
+        type='line',
+        x0 = month_sum_df['datetime'].min(),
+        y0 = monthly_saving_target,
+        x1 = month_sum_df['datetime'].max(),
+        y1 = monthly_saving_target,
+        line = dict(color='Black',),
+        xref = 'x',
+        yref = 'y')
 
+    fig.add_annotation(
+        x = month_sum_df['datetime'].median(), 
+        y = month_sum_df['total'].max() * 1.1,
+        text = f"Avg. monthly savings: ${int(round(month_sum_df['total'].mean(), -1))}",
+        showarrow = False,    
+        font = dict(size=18),
+        yshift = 0)
+
+    return fig
+
+@app.callback(
+    Output("spending_line_plot", "figure"),
+    Input("historical_start_year", "value"))
+def spending_line_plot(historical_start_year):
+
+    month_spend_df = finance_df[
+        (finance_df['year'] >= historical_start_year) & 
+        ~(finance_df['category'].isin(['income', 'bonus']))] \
+        .groupby(['year', 'month']).agg({'total': 'sum'}) 
+    
+    month_spend_df['day'] = 1
+    month_spend_df['datetime'] = pd.to_datetime(month_spend_df[['year', 'month', 'day']])
+
+    fig = px.line(month_spend_df, x = 'datetime', y= 'total')
     return fig
 
 @app.callback(
@@ -188,17 +221,18 @@ def monthly_finance_barchart(month, year, profit_target, housing_payment):
     
     general_budget = pd.DataFrame(data = {
         'category': ['housing', 'groceries', 'discretionary'],
-        'budget': [housing_payment * -1.05, -400, (profit_target + (housing_payment * -1.05 - 400)) * -1]
+        'budget': [housing_payment * 1.05, -400, -750]
     })
 
     filter_df = filter_df.merge(general_budget, how = 'left', on = 'category')
 
+    housing_adder = housing_payment - filter_df[filter_df['category'] == 'housing']['total'].sum()
     sum_df = pd.DataFrame(data = {
         'year': [year],
         'month': [month],
         'category': 'profit/loss',
         'budget': [profit_target],
-        'total': [filter_df['total'].sum()]
+        'total': [filter_df['total'].sum() + housing_adder]
     })
 
     filter_df = pd.concat([filter_df, sum_df])
@@ -234,20 +268,17 @@ def avg_category_piechart(profit_target, historical_start_year):
         (finance_df['year'] >= historical_start_year) & 
         ~((finance_df['year'] == datetime.now().year) & (finance_df['month'] == datetime.now().month))]
 
-    avg_df = pd.concat(
-        [
-            historical_df.groupby(['year', 'month', 'category']).agg({'total': 'sum'}).reset_index(drop = False),
-            month_sum_df
-        ]).groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
-
-    avg_df = avg_df[~avg_df['category'].isin(['bonus', 'loans', 'music', 'free_cash'])]
-    #avg_df.loc[avg_df['category'] == 'housing', ['total']] = housing_payment
-    avg_df['income'] = list(avg_df[avg_df['category'] == 'income']['total'])[0]
-
-    avg_df['percentage'] = abs(avg_df['total'] / avg_df['income'])
+    avg_df = historical_df \
+        .groupby(['year', 'month', 'category']).agg({'total': 'sum'}) \
+        .groupby(['category']).agg({'total': 'mean'}).reset_index(drop = False)
+    
+    avg_savings = month_sum_df[month_sum_df['category'] == 'saving']['total'].mean()
+    avg_df = avg_df[~(avg_df['category'].isin(['bonus', 'loans', 'music']))]
+    avg_df = pd.concat([avg_df, pd.DataFrame(data = {'category': ['savings'], 'total': [avg_savings] })])
+    avg_df['total'] = abs(avg_df['total'])
     avg_df = avg_df[avg_df['category'] != 'income']
 
-    fig = px.pie(avg_df, values = 'percentage', names = 'category')
+    fig = px.pie(avg_df, values = 'total', names = 'category')
 
     return fig
 
@@ -280,7 +311,7 @@ def accounts_table(profit_target, housing_payment, saving_months, historical_sta
         
     monthly_df['spending'] = avg_spend_df.loc[avg_spend_df['category'].isin(['discretionary', 'groceries']), ['total']].sum()[0]
 
-    monthly_df['housing'] = housing_payment * -1
+    monthly_df['housing'] = housing_payment
     monthly_df['savings'] = monthly_df['income'] + monthly_df['spending'] + monthly_df['investments'] + monthly_df['housing']
 
     final_df = pd.concat([pivot_account_df.reset_index(drop = True), monthly_df.reset_index(drop = True)], axis = 1)
@@ -289,7 +320,6 @@ def accounts_table(profit_target, housing_payment, saving_months, historical_sta
 
     final_df = pd.melt(final_df, id_vars = [], value_vars = ['bank', 'investment', 'income', 'spending', 'housing', 'savings',  'investments', 'excess_savings'])
     
-    format_dict = {'total':'${0:,.0f}'}
     final_df['total'] =  round(final_df['value'], -1)
     final_df.drop(columns = ['value'], inplace = True)
     final_df = final_df.apply(lambda x: [f'${y:,.0f}'for y in x] if x.name=='total' else x)
@@ -314,37 +344,10 @@ app.layout = dbc.Container([
     [
         dbc.Col(html.Div(year_dropdown), width = {'size': 3 }),
         dbc.Col(html.Div(month_dropdown), width = {'size': 3 }),
-
-        dbc.Col(
-            html.Div(["Profit Target: ", dcc.Input(id='profit_target', value=3000, type='number')]),
-            style = {'textAlign': 'right'},
-            width = {'size': 2 }),
-
-        dbc.Col(
-            html.Div(["Housing Payment: ", dcc.Input(id='housing_payment', value=1700, type='number')]), 
-            style = {'textAlign': 'right'},
-            width = {'size': 2 }),
-
-        dbc.Col(
-            html.Div(["Savings (Months): ", dcc.Input(id='saving_months', value=6, type='number')]), 
-            style = {'textAlign': 'right'},
-            width = {'size': 2 })
     ],
-        justify="evenly",
+        justify="start",
         className = 'g-0'
     ),
-
-    dbc.Row(
-    [
-        dbc.Col(
-            html.Div(["Historical Start Year: ", dcc.Input(id='historical_start_year', value=2019, type='number')]),
-            style = {'textAlign': 'right'},
-            width = {'size': 2, 'offset': 6}),
-    ],
-        justify="evenly",
-        className = 'g-0'
-    ),    
-
     dbc.Row(
     [
         dbc.Col(
@@ -357,20 +360,55 @@ app.layout = dbc.Container([
             width = {'size': 6}
         )
     ],
-        justify="evenly",
-        className = 'g-0'
+        justify="evenly"
     ),
 
-    #html.Div([dash_table.DataTable(id = 'accounts_table', data = [])]),
+    dbc.Row(
+        [
+            dbc.Col(
+                html.Div(["Savings (Months): ", dcc.Input(id='saving_months', value=6, type='number')]), 
+                style = {'textAlign': 'right'},
+                width = {'size': 2 }),
+
+            dbc.Col(
+                html.Div(["Historical Start Year: ", dcc.Input(id='historical_start_year', value=2019, type='number')]),
+                style = {'textAlign': 'right'},
+                width = {'size': 2 }),
+
+            dbc.Col(
+                html.Div(["Profit Target: ", dcc.Input(id='profit_target', value=3000, type='number', step = 100)]),
+                style = {'textAlign': 'right'},
+                width = {'size': 2 }),
+
+        dbc.Col(
+            html.Div(["Housing Payment: ", dcc.Input(id='housing_payment', value=-1700, type='number', step = 100)]), 
+            style = {'textAlign': 'right'},
+            width = {'size': 2 })
+        ],
+        className = 'g-0',
+        align = 'center',
+        justify = 'evenly'
+    ),
+
     dbc.Row(
     [
         dbc.Col(
             html.Div([dash_table.DataTable(id = 'accounts_table', data = [])]),
-            width = {'size': 3}
+            width = {'size': 2 }
         ),
+
+        dbc.Col(
+            html.Div([dcc.Graph(id="savings_line_plot")]),
+            width = {'size': 4 }
+        ),
+
+        dbc.Col(
+            html.Div([dcc.Graph(id="spending_line_plot")]),
+            width = {'size': 4 }
+        )
     ],
         justify="evenly",
-        className = 'g-0'
+        align = 'center'
     )
 ],
     fluid = True
