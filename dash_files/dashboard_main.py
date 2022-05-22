@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime
 
 from data_getters.utils import get_latest_file
-from data_getters.finances import get_month_sum_df
+from data_getters.finances import Finances_Processor
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -42,7 +42,7 @@ def all_profit_loss_barchart():
     Input("historical_start_year", "value"))
 def savings_line_plot(monthly_saving_target, historical_start_year):
 
-    month_sum_df = get_month_sum_df(finance_df)
+    month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
     month_sum_df['day'] = 1
     month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
