@@ -6,14 +6,6 @@ import pandas as pd
 import requests
 
 class Finances_Processor():
-
-    #TODO Ideally I can get budget values from Mint
-    def get_general_budget(user_config: dict):
-        
-        budget_df = pd.DataFrame(data = user_config['finances_config']['general_budget'], index = [0]).T.reset_index(drop = False) \
-            .rename(columns = {'index': 'category', 0: 'budget'})
-
-        return budget_df
     
     def send_finance_request_generic(method: str, user_name: str, read_cache: bool = False):
 
@@ -50,7 +42,18 @@ class Finances_Processor():
         ret_df.rename(columns = {'accountType': 'account_type',  'Total': 'total'}, inplace = True)
         date_str = datetime.datetime.now().date()
         ret_df.to_csv(f'./temp_cache/account_totals_{date_str}.csv')
+        
         return ret_df
+
+class Finances_Dashboard_Helpers():
+
+    #TODO Ideally I can get budget values from Mint
+    def get_general_budget(user_config: dict):
+        
+        budget_df = pd.DataFrame(data = user_config['finances_config']['general_budget'], index = [0]).T.reset_index(drop = False) \
+            .rename(columns = {'index': 'category', 0: 'budget'})
+
+        return budget_df
 
     def get_month_sum_df(finance_df: pd.DataFrame):
         
@@ -61,3 +64,17 @@ class Finances_Processor():
         month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
 
         return month_sum_df
+
+    def get_budget_shortfall(finance_df: pd.DataFrame, profit_target: int, month: int, year: int, historical_start_year: int):
+
+        monthly_income = finance_df[
+            (finance_df['month'] == month) & 
+            (finance_df['year'] == year) & 
+            (finance_df['category'] == 'income')]['total'].sum()
+
+        avg_spend = finance_df[
+            (finance_df['year'] >= historical_start_year) & 
+            ~(finance_df['category'].isin(['income', 'bonus']))] \
+            .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)['total'].mean()
+
+        return (avg_spend + monthly_income) - profit_target

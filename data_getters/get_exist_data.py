@@ -69,14 +69,25 @@ class Exist_Processor():
 
         return ret_df
 
+    def get_latest_data(username: str):
+
+        user_config = get_user_config(username)
+        login_dict = Exist_Processor.get_login_credentials(user_config)
+
+        exist_df = Exist_Processor.get_attributes_df(Exist_Processor.get_date_range(), login_dict)
+        
+        date_str = exist_df['date'].max()
+        exist_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')
+
+class Exist_Dashboard_Helpers():
+
     def format_exist_df(exist_df: pd.DataFrame, user_config: dict):
         
         key_habits_df = pd.DataFrame(data = user_config['exist_config']['key_habits'], index = [0]).T.reset_index(drop = False) \
             .rename(columns = {'index': 'attribute', 0: 'value'})  
         
-        habit_df = exist_df[exist_df['attribute'].isin(key_habits_df)]
-        habit_df = habit_df.astype({'value': 'float64'})
-        habit_df = habit_df.merge(key_habits_df, on='attribute', how='left')
+        habit_df = exist_df[exist_df['attribute'].isin(key_habits_df)].astype({'value': 'float64'}) \
+            .merge(key_habits_df, on='attribute', how='left')
 
         habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_start', ((habit_df['value'] / 60) + 12) % 24, habit_df['value'])
         habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_end', habit_df['value'] / 60, habit_df['value'])
@@ -87,17 +98,6 @@ class Exist_Processor():
             habit_df['value'] >= habit_df['success'])
 
         habit_df['date'] = pd.to_datetime(habit_df['date'])
-        habit_df['year'] = habit_df['date'].dt.year
-        habit_df['month'] = habit_df['date'].dt.month  
+        habit_df[['year', 'month']] = [habit_df['date'].dt.year, habit_df['date'].dt.month]
 
         return habit_df
-
-    def get_latest_data(username: str):
-
-        user_config = get_user_config(username)
-        login_dict = Exist_Processor.get_login_credentials(user_config)
-
-        exist_df = Exist_Processor.get_attributes_df(Exist_Processor.get_date_range(), login_dict)
-        
-        date_str = exist_df['date'].max()
-        exist_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')

@@ -81,6 +81,21 @@ class Marvin_Processor():
                 'duration': [duration]
         })
 
+    def get_latest_data(username: str):
+        
+        server_db = Marvin_Processor.get_couch_server_db(username)
+
+        categories = list(server_db.find({'selector': {'db': 'Categories'}}))
+        all_tasks = server_db.find({'selector': {'db': 'Tasks'}})
+
+        task_df = pd.concat(map(Marvin_Processor.parse_task, all_tasks, repeat(categories)))
+        task_df = task_df[task_df['day'] != 'unassigned']
+
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        task_df.to_csv(f'./temp_cache/marvin_tasks_{date_str}.csv', index=False)
+
+class Marvin__Dashboard_Helpers():
+    
     def format_task_df(task_df: pd.DataFrame, user_config: dict):
 
         marvin_config = user_config['marvin_config']
@@ -102,16 +117,3 @@ class Marvin_Processor():
         task_df.rename(columns = {'end_val': 'category'}, inplace=True)
 
         return task_df
-
-    def get_latest_data(username: str):
-        
-        server_db = Marvin_Processor.get_couch_server_db(username)
-
-        categories = list(server_db.find({'selector': {'db': 'Categories'}}))
-        all_tasks = server_db.find({'selector': {'db': 'Tasks'}})
-
-        task_df = pd.concat(map(Marvin_Processor.parse_task, all_tasks, repeat(categories)))
-        task_df = task_df[task_df['day'] != 'unassigned']
-
-        date_str = datetime.now().strftime('%Y-%m-%d')
-        task_df.to_csv(f'./temp_cache/marvin_tasks_{date_str}.csv', index=False)
