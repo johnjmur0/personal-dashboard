@@ -129,4 +129,4 @@ dmypy.json
 .pyre/
 
 #raw data
-./temp_cache
+temp_cache/.
