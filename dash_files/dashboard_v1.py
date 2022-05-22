@@ -11,6 +11,7 @@ from datetime import datetime
 from data_getters.utils import get_latest_file
 from data_getters.get_exist_data import format_exist_df, key_habits
 from data_getters.get_marvin_data import format_task_df
+from data_getters.finances import get_month_sum_df
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
