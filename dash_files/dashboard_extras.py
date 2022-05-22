@@ -54,3 +54,25 @@ def task_duration_piechart(month, year):
     fig = px.pie(grouped_df, values = 'duration', names = 'category')
 
     return fig
+
+def all_profit_loss_barchart():
+    
+    finance_df['datetime'] = pd.to_datetime(finance_df[['year', 'month', 'day']])
+    finance_df['quarter'] = finance_df['datetime'].dt.quarter
+    sum_df = finance_df[finance_df['category'] != 'bonus'].groupby(['year', 'quarter']).agg({'total': 'sum'}).reset_index(drop = False)
+
+    quarter_month_map = pd.DataFrame(data = {
+        'quarter': [1, 2, 3, 4],
+        'month': [1, 4, 7, 10]
+    })
+
+    sum_df = sum_df.merge(quarter_month_map, on = 'quarter', how = 'left')
+    sum_df['day'] = 1
+    sum_df['datetime'] = pd.to_datetime(sum_df[['year', 'month', 'day']])
+
+    fig = px.bar(sum_df, x='datetime', y='total', text_auto='.2s')
+    fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
+    fig.update_xaxes(tickformat='Q%q \n%Y', dtick = 'M3')
+    fig.update_layout(yaxis_title=None, xaxis_title = None)
+
+    return fig

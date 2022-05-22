@@ -38,7 +38,7 @@ class Exist_Processor():
         month_duration = math.ceil((end_date - start_date) / np.timedelta64(1, 'M'))
         return pd.date_range(start = start_date, freq = 'M', periods = month_duration)
 
-    def get_attributes_df(date_range):
+    def get_attributes_df(date_range: pd.date_range):
 
         attributes_df = pd.DataFrame()
 
@@ -67,7 +67,7 @@ class Exist_Processor():
 
         return ret_df
 
-    def format_exist_df(exist_df):
+    def format_exist_df(exist_df: pd.DataFrame):
         
         habit_df = exist_df[exist_df['attribute'].isin(Exist_Processor.key_habits['attribute'])]
         habit_df = habit_df.astype({'value': 'float64'})

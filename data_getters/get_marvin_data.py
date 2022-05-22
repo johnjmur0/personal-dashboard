@@ -86,7 +86,7 @@ class Marvin_Processor():
                 'duration': [duration]
         })
 
-    def format_task_df(task_df):
+    def format_task_df(task_df: pd.DataFrame):
         
         task_df = task_df[task_df['day'] != 'unassigned']
         task_df['day'] = pd.to_datetime(task_df['day'])

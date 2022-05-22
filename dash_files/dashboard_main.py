@@ -12,40 +12,16 @@ server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 finance_df = get_latest_file(file_prefix = 'daily_finances')
+month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
 account_df = get_latest_file(file_prefix = 'account_totals')
-
-def all_profit_loss_barchart():
-    
-    finance_df['datetime'] = pd.to_datetime(finance_df[['year', 'month', 'day']])
-    finance_df['quarter'] = finance_df['datetime'].dt.quarter
-    sum_df = finance_df[finance_df['category'] != 'bonus'].groupby(['year', 'quarter']).agg({'total': 'sum'}).reset_index(drop = False)
-
-    quarter_month_map = pd.DataFrame(data = {
-        'quarter': [1, 2, 3, 4],
-        'month': [1, 4, 7, 10]
-    })
-
-    sum_df = sum_df.merge(quarter_month_map, on = 'quarter', how = 'left')
-    sum_df['day'] = 1
-    sum_df['datetime'] = pd.to_datetime(sum_df[['year', 'month', 'day']])
-
-    fig = px.bar(sum_df, x='datetime', y='total', text_auto='.2s')
-    fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
-    fig.update_xaxes(tickformat='Q%q \n%Y', dtick = 'M3')
-    fig.update_layout(yaxis_title=None, xaxis_title = None)
-
-    return fig
 
 @app.callback(
     Output("savings_line_plot", "figure"),
     Input("profit_target", "value"),
     Input("historical_start_year", "value"))
-def savings_line_plot(monthly_saving_target, historical_start_year):
+def savings_line_plot(monthly_saving_target: int, historical_start_year: int):
 
-    month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
-    month_sum_df['day'] = 1
-    month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
 
     fig = px.line(month_sum_df, x = 'datetime', y= 'total')
     fig.add_shape(
@@ -84,38 +60,32 @@ def savings_line_plot(monthly_saving_target, historical_start_year):
     Output("spending_line_plot", "figure"),
     Input("profit_target", "value"),
     Input("historical_start_year", "value"))
-def spending_line_plot(profit_target, historical_start_year):
+def spending_line_plot(profit_target: int, historical_start_year: int):
 
-    month_spend_df = finance_df[
-        (finance_df['year'] >= historical_start_year) & 
-        ~(finance_df['category'].isin(['income', 'bonus']))] \
-        .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
-
-    month_spend_df['day'] = 1
-    month_spend_df['datetime'] = pd.to_datetime(month_spend_df[['year', 'month', 'day']])
+    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
 
     monthly_income = finance_df[
-        (finance_df['month'] == month_spend_df['datetime'].max().month - 1) & 
-        (finance_df['year'] == month_spend_df['datetime'].max().year) & 
+        (finance_df['month'] == month_sum_df['datetime'].max().month - 1) & 
+        (finance_df['year'] == month_sum_df['datetime'].max().year) & 
         (finance_df['category'] == 'income')]['total'].sum()
         
     monthly_spending_target = (monthly_income - profit_target) * -1
-    avg_spending_diff = month_spend_df['total'].mean() - monthly_spending_target
-    fig = px.line(month_spend_df, x = 'datetime', y= 'total')
+    avg_spending_diff = month_sum_df['total'].mean() - monthly_spending_target
+    fig = px.line(month_sum_df, x = 'datetime', y= 'total')
 
     fig.add_shape(
         type='line',
-        x0 = month_spend_df['datetime'].min(),
+        x0 = month_sum_df['datetime'].min(),
         y0 = int(monthly_spending_target),
-        x1 = month_spend_df['datetime'].max(),
+        x1 = month_sum_df['datetime'].max(),
         y1 = int(monthly_spending_target),
         line = dict(color='Black',),
         xref = 'x',
         yref = 'y')
 
     fig.add_annotation(
-        x = month_spend_df['datetime'].median(), 
-        y = month_spend_df['total'].max() * 1.1,
+        x = month_sum_df['datetime'].median(), 
+        y = month_sum_df['total'].max() * 1.1,
         text = f"Avg. spending diff: ${int(round(avg_spending_diff, -1))}",
         showarrow = False,    
         font = dict(size=18),
@@ -130,16 +100,11 @@ def spending_line_plot(profit_target, historical_start_year):
     Input("finance_year_dropdown", "value"),
     Input("profit_target", "value"),
     Input("housing_payment", "value"))
-def monthly_finance_barchart(month, year, profit_target, housing_payment):
+def monthly_finance_barchart(month: int, year: int, profit_target: int, housing_payment: int):
     
-    filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)].groupby('category').agg({'total': 'sum'}).reset_index(drop = False)
-    
-    general_budget = pd.DataFrame(data = {
-        'category': ['housing', 'groceries', 'discretionary'],
-        'budget': [housing_payment * 1.05, -400, -750]
-    })
+    filter_df = month_sum_df[(month_sum_df['year'] == year) & (month_sum_df['month'] == month)]    
 
-    filter_df = filter_df.merge(general_budget, how = 'left', on = 'category')
+    filter_df = filter_df.merge(Finances_Processor.get_general_budget(housing_payment), how = 'left', on = 'category')
 
     housing_adder = housing_payment - filter_df[filter_df['category'] == 'housing']['total'].sum()
     sum_df = pd.DataFrame(data = {
@@ -156,8 +121,14 @@ def monthly_finance_barchart(month, year, profit_target, housing_payment):
 
     filter_df = pd.melt(filter_df, id_vars = ['category', 'year', 'month'], value_vars = ['total', 'budget'])
 
-    fig = px.bar(filter_df, x='category', y='value', color='variable', barmode = 'group', text_auto = '.2s', 
-                    color_discrete_sequence = ['blue', 'grey'])
+    fig = px.bar(
+        filter_df, 
+        x='category', 
+        y='value', 
+        color='variable', 
+        barmode = 'group', 
+        text_auto = '.2s', 
+        color_discrete_sequence = ['blue', 'grey'])
 
     fig.update_traces(textfont_size=12, textangle=0, textposition="outside", cliponaxis=False)
     fig.update_layout(yaxis_title=None, xaxis_title = None)
@@ -168,9 +139,9 @@ def monthly_finance_barchart(month, year, profit_target, housing_payment):
     Output("avg_category_piechart", "figure"), 
     Input("housing_payment", "value"),
     Input("historical_start_year", "value"))
-def avg_category_piechart(housing_payment, historical_start_year):
+def avg_category_piechart(housing_payment: int, historical_start_year: int):
     
-    month_sum_df = get_month_sum_df(finance_df)
+    month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
 
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
 
@@ -207,9 +178,9 @@ def avg_category_piechart(housing_payment, historical_start_year):
     Input("housing_payment", "value"),
     Input("saving_months", "value"),
     Input("historical_start_year", "value"))
-def accounts_table(profit_target, housing_payment, saving_months, historical_start_year):
+def accounts_table(profit_target: int, housing_payment: int, saving_months: int, historical_start_year: int):
 
-    month_sum_df = get_month_sum_df(finance_df)
+    month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
 
     month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
     month_sum_df['free_cash'] = month_sum_df['total'] - profit_target
