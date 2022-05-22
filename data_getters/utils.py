@@ -2,6 +2,9 @@ import os
 import glob
 import pandas as pd
 
+milliseconds_in_hours = 3600000
+milliseconds_in_seconds = 1000
+
 def get_latest_file(file_prefix):
     cache_dir = './temp_cache'
     files = glob.glob(f'{cache_dir}/{file_prefix}*')

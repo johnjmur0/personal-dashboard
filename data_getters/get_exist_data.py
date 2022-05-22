@@ -10,7 +10,9 @@ class Exist_Processor():
     exist_server_url = 'https://exist.io/api/1/'
     attributes_endpoint = 'users/$self/attributes'
     #TODO put in config
+    
     login = {'username': 'johnjmur0', 'password': 'HuLP5h$k@5wg'}
+    
     key_habits = pd.DataFrame( data = {
             'attribute': ['exercise', 'sleep_start', 'sleep_end', 'steps', 'free_in_am', 'got_outside', 'read', 'mood'],
             'success': [1, 10.5, 7.5, 4000, 1, 1, 1, 6]
