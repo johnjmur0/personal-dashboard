@@ -1,103 +1,25 @@
-from operator import index
-import os
-import glob
-from sys import prefix
-from tokenize import group
+# from operator import index
+# from sys import prefix
+# from tokenize import group
 import flask
 from dash import Dash, html, dcc, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
-import numpy as np
 from datetime import datetime
+
+from data_getters.utils import get_latest_file
+from data_getters.get_exist_data import format_exist_df, key_habits
+from data_getters.get_marvin_data import format_task_df
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-def format_task_df(task_df):
-    
-    task_df = task_df[task_df['day'] != 'unassigned']
-    task_df['day'] = pd.to_datetime(task_df['day'])
-    task_df['month'] = task_df['day'].dt.month
-    task_df['year'] = task_df['day'].dt.year
-
-    task_df[['sub_project_2', 'sub_project', 'main_category', 'main_category_dupe']] = task_df['parent'].str.split('/', expand = True)
-
-    aggregate_categories = ['Orsted', 'Edison Energy', 'Music']
-    task_df['end_val'] = np.where(
-        task_df['category'].isin(aggregate_categories), 
-        task_df['category'], 
-        task_df['sub_project_2'])
-
-    task_df.drop(columns = {'main_category_dupe', 'category', 'sub_project', 'sub_project_2', 'parent'}, inplace=True)
-    task_df.rename(columns = {'end_val': 'category'}, inplace=True)
-
-    return task_df
-
-def format_exist_df(exist_df, key_habits):
-
-    habit_df = exist_df[exist_df['attribute'].isin(key_habits['attribute'])]
-    habit_df = habit_df.astype({'value': 'float64'})
-    habit_df = habit_df.merge(key_habits, on='attribute', how='left')
-
-    habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_start', ((habit_df['value'] / 60) + 12) % 24, habit_df['value'])
-    habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_end', habit_df['value'] / 60, habit_df['value'])
-
-    habit_df['achieved'] = np.where(
-        habit_df['attribute'].isin(['sleep_start', 'sleep_end']), 
-        habit_df['value'] <= habit_df['success'], 
-        habit_df['value'] >= habit_df['success'])
-
-    habit_df['date'] = pd.to_datetime(habit_df['date'])
-    habit_df['year'] = habit_df['date'].dt.year
-    habit_df['month'] = habit_df['date'].dt.month  
-
-    return habit_df
-
-def get_latest_file(file_prefix):
-    cache_dir = './temp_cache'
-    files = glob.glob(f'{cache_dir}/{file_prefix}*')
-
-    latest_date = pd.to_datetime('1/1/2019')
-    for file in files:
-        file_name = os.path.basename(file)
-        split_filename = file_name.split('_')
-
-        if len(split_filename) < 3:
-            continue
-
-        date = pd.to_datetime(split_filename[2].replace('.csv', ''))
-        if date > latest_date:
-            latest_date = date.date()
-        
-    file_path = [x for x in files if latest_date.strftime('%Y-%m-%d') in x]
-
-    if len(file_path) == 0:
-        raise ValueError(f'No dated file for prefix {file_prefix}!')
-    
-    ret_df = pd.read_csv(file_path[0], index_col = None)
-    return ret_df
-    
-def get_month_sum_df(finance_df):
-
-    month_sum_df = finance_df[~finance_df['category'] \
-    .isin(['bonus', 'investment'])].groupby(['year', 'month']) \
-    .agg({'total': 'sum'}).reset_index(drop = False)
-    
-    return month_sum_df
-
 finance_df = get_latest_file(file_prefix = 'daily_finances')
 account_df = get_latest_file(file_prefix = 'account_totals')
-task_df = get_latest_file(file_prefix = 'marvin_tasks')
-exist_df = get_latest_file(file_prefix = 'exist_data')
 
-key_habits = pd.DataFrame( data = {
-        'attribute': ['exercise', 'sleep_start', 'sleep_end', 'steps', 'free_in_am', 'got_outside', 'read', 'mood'],
-        'success': [1, 10.5, 7.5, 4000, 1, 1, 1, 6]
-    })
-
-task_df = format_task_df(task_df)
-habit_df = format_exist_df(exist_df, key_habits)
+task_df = format_task_df(get_latest_file(file_prefix = 'marvin_tasks'))
+habit_df = format_exist_df(get_latest_file(file_prefix = 'exist_data'))
 
 def all_profit_loss_barchart():
     

@@ -41,6 +41,31 @@ for index, row in attributes_df.iterrows():
     df['attribute'] = row['attribute']
     ret_df = pd.concat([ret_df, df])
 
+key_habits = pd.DataFrame( data = {
+        'attribute': ['exercise', 'sleep_start', 'sleep_end', 'steps', 'free_in_am', 'got_outside', 'read', 'mood'],
+        'success': [1, 10.5, 7.5, 4000, 1, 1, 1, 6]
+    })
+
+def format_exist_df(exist_df):
+    
+    habit_df = exist_df[exist_df['attribute'].isin(key_habits['attribute'])]
+    habit_df = habit_df.astype({'value': 'float64'})
+    habit_df = habit_df.merge(key_habits, on='attribute', how='left')
+
+    habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_start', ((habit_df['value'] / 60) + 12) % 24, habit_df['value'])
+    habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_end', habit_df['value'] / 60, habit_df['value'])
+
+    habit_df['achieved'] = np.where(
+        habit_df['attribute'].isin(['sleep_start', 'sleep_end']), 
+        habit_df['value'] <= habit_df['success'], 
+        habit_df['value'] >= habit_df['success'])
+
+    habit_df['date'] = pd.to_datetime(habit_df['date'])
+    habit_df['year'] = habit_df['date'].dt.year
+    habit_df['month'] = habit_df['date'].dt.month  
+
+    return habit_df
+
 date_str = ret_df['date'].max()
 ret_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')
 

@@ -3,6 +3,7 @@ import couchdb
 from datetime import datetime
 from itertools import repeat
 import pandas as pd
+import numpy as np
 import time
 
 milliseconds_in_hours = 3600000
@@ -42,7 +43,6 @@ def get_parent_list(task, categories):
 
     return parent_list
 
-
 def parse_task(task, categories):
     
     parent_list = get_parent_list(task, categories)
@@ -79,6 +79,26 @@ def parse_task(task, categories):
             'end_time': [end_time],
             'duration': [duration]
     })
+
+def format_task_df(task_df):
+    
+    task_df = task_df[task_df['day'] != 'unassigned']
+    task_df['day'] = pd.to_datetime(task_df['day'])
+    task_df['month'] = task_df['day'].dt.month
+    task_df['year'] = task_df['day'].dt.year
+
+    task_df[['sub_project_2', 'sub_project', 'main_category', 'main_category_dupe']] = task_df['parent'].str.split('/', expand = True)
+
+    aggregate_categories = ['Orsted', 'Edison Energy', 'Music']
+    task_df['end_val'] = np.where(
+        task_df['category'].isin(aggregate_categories), 
+        task_df['category'], 
+        task_df['sub_project_2'])
+
+    task_df.drop(columns = {'main_category_dupe', 'category', 'sub_project', 'sub_project_2', 'parent'}, inplace=True)
+    task_df.rename(columns = {'end_val': 'category'}, inplace=True)
+
+    return task_df
 
 start = time.time()
 categories = list(serverDB.find({'selector': {'db': 'Categories'}}))

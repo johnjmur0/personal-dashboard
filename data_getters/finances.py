@@ -40,6 +40,14 @@ def get_current_accounts(user_name = 'jjm'):
     ret_df.to_csv(f'./temp_cache/account_totals_{date_str}.csv')
     return ret_df
 
+def get_month_sum_df(finance_df):
+
+    month_sum_df = finance_df[~finance_df['category'] \
+    .isin(['bonus', 'investment'])].groupby(['year', 'month']) \
+    .agg({'total': 'sum'}).reset_index(drop = False)
+    
+    return month_sum_df
+
 if __name__ == '__main__':
     get_mint_historical_data(False)
         
