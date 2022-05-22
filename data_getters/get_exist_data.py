@@ -5,30 +5,33 @@ import numpy as np
 import requests
 from datetime import datetime
 
+from utils import get_user_config
+
 class Exist_Processor():
 
     exist_server_url = 'https://exist.io/api/1/'
     attributes_endpoint = 'users/$self/attributes'
-    #TODO put in config
     
-    login = {'username': 'johnjmur0', 'password': 'HuLP5h$k@5wg'}
-    
-    key_habits = pd.DataFrame( data = {
-            'attribute': ['exercise', 'sleep_start', 'sleep_end', 'steps', 'free_in_am', 'got_outside', 'read', 'mood'],
-            'success': [1, 10.5, 7.5, 4000, 1, 1, 1, 6]
-        })
+    def get_login_credentials(user_config: dict):
 
-    def send_simple_request():
+        return { 
+            'username': user_config['exist_config']['username'], 
+            'password': user_config['exist_config']['password'] 
+        }             
+
+    def get_token_header(login_dict: dict):
 
         token_endpoint = 'auth/simple-token/'
 
         token_url = Exist_Processor.exist_server_url + token_endpoint
-        response = requests.post(token_url, data = Exist_Processor.login, verify = False)
+        response = requests.post(token_url, data = login_dict, verify = False)
         token = response.json()['token']
         token_header = {'Authorization': 'Token ' + token }
         token_response = requests.get(Exist_Processor.exist_server_url + 'users/$self/today/', headers = token_header)
 
         assert token_response == 200
+
+        return token_header
 
     def get_date_range():
 
@@ -38,9 +41,11 @@ class Exist_Processor():
         month_duration = math.ceil((end_date - start_date) / np.timedelta64(1, 'M'))
         return pd.date_range(start = start_date, freq = 'M', periods = month_duration)
 
-    def get_attributes_df(date_range: pd.date_range):
+    def get_attributes_df(date_range: pd.date_range, login_dict: dict):
 
         attributes_df = pd.DataFrame()
+
+        token_header = Exist_Processor.get_token_header(login_dict)
 
         for date in date_range:
             
@@ -50,7 +55,7 @@ class Exist_Processor():
             date_params = f'?limit={count}&date_max={date_str}'
             
             request_str = Exist_Processor.exist_server_url + Exist_Processor.attributes_endpoint + date_params
-            attributes_response = requests.get(request_str, headers = Exist_Processor.token_header)
+            attributes_response = requests.get(request_str, headers = token_header)
 
             response_df = pd.DataFrame(attributes_response.json())
             attributes_df = pd.concat([attributes_df, response_df])
@@ -62,16 +67,16 @@ class Exist_Processor():
             df['attribute'] = row['attribute']
             ret_df = pd.concat([ret_df, df])
 
-        date_str = ret_df['date'].max()
-        ret_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')
-
         return ret_df
 
-    def format_exist_df(exist_df: pd.DataFrame):
+    def format_exist_df(exist_df: pd.DataFrame, user_config: dict):
         
-        habit_df = exist_df[exist_df['attribute'].isin(Exist_Processor.key_habits['attribute'])]
+        key_habits_df = pd.DataFrame(data = user_config['exist_config']['key_habits'], index = [0]).T.reset_index(drop = False) \
+            .rename(columns = {'index': 'attribute', 0: 'value'})  
+        
+        habit_df = exist_df[exist_df['attribute'].isin(key_habits_df)]
         habit_df = habit_df.astype({'value': 'float64'})
-        habit_df = habit_df.merge(Exist_Processor.key_habits, on='attribute', how='left')
+        habit_df = habit_df.merge(key_habits_df, on='attribute', how='left')
 
         habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_start', ((habit_df['value'] / 60) + 12) % 24, habit_df['value'])
         habit_df['value'] = np.where(habit_df['attribute'] == 'sleep_end', habit_df['value'] / 60, habit_df['value'])
@@ -87,8 +92,12 @@ class Exist_Processor():
 
         return habit_df
 
-    def get_latest_data():
+    def get_latest_data(username: str):
 
-        Exist_Processor.send_simple_request()
-        exist_df = Exist_Processor.get_attributes_df(Exist_Processor.get_date_range())
-        return Exist_Processor.format_exist_df(exist_df)
+        user_config = get_user_config(username)
+        login_dict = Exist_Processor.get_login_credentials(user_config)
+
+        exist_df = Exist_Processor.get_attributes_df(Exist_Processor.get_date_range(), login_dict)
+        
+        date_str = exist_df['date'].max()
+        exist_df.to_csv(f'./temp_cache/exist_data_{date_str}.csv')

@@ -5,27 +5,22 @@ from itertools import repeat
 import pandas as pd
 import numpy as np
 
-from utils import milliseconds_in_hours, milliseconds_in_seconds
+from utils import milliseconds_in_hours, milliseconds_in_seconds, get_user_config
 
 class Marvin_Processor():
 
     endpoint = 'https://serv.amazingmarvin.com/api/'
-    # Database access
-    sync_server = 'https://512940bf-6e0c-4d7b-884b-9fc66185836b-bluemix.cloudant.com'
 
-    #TODO put in config
-    # Marvin API access
-    api_token = 'xmJU2SQBDK5KWGfKDm2YQpDHmUQ='
-    full_access_token = 'a0QIpNKrR1l9j8Po3CkqTt2L1v0='
-    aggregate_categories = ['Orsted', 'Edison Energy', 'Music']
+    def get_couch_server_db(username):
 
-    sync_database = 'u391630018'
-    sync_user = 'apikey-8d34200f26004b4c9646929853fdd852'
-    sync_password = '92c8dbd20b1dcf2ee28c2a99508bce0d2c6446d7'
+        user_config = get_user_config(username)
+        marvin_config = user_config['marvin_config']
 
-    couch = couchdb.Server(sync_server)
-    couch.resource.credentials = (sync_user, sync_password)
-    server_DB = couch[sync_database]
+        couch = couchdb.Server(marvin_config['sync_server'])
+        couch.resource.credentials = (marvin_config['sync_user'], marvin_config['sync_password'])
+        server_DB = couch[marvin_config['sync_database']]
+
+        return server_DB
 
     def parse_task_duration(task):
 
@@ -86,8 +81,11 @@ class Marvin_Processor():
                 'duration': [duration]
         })
 
-    def format_task_df(task_df: pd.DataFrame):
-        
+    def format_task_df(task_df: pd.DataFrame, user_config: dict):
+
+        marvin_config = user_config['marvin_config']
+        categories_to_aggregate = marvin_config['aggregate_categories']
+
         task_df = task_df[task_df['day'] != 'unassigned']
         task_df['day'] = pd.to_datetime(task_df['day'])
         task_df['month'] = task_df['day'].dt.month
@@ -96,7 +94,7 @@ class Marvin_Processor():
         task_df[['sub_project_2', 'sub_project', 'main_category', 'main_category_dupe']] = task_df['parent'].str.split('/', expand = True)
         
         task_df['end_val'] = np.where(
-            task_df['category'].isin(Marvin_Processor.aggregate_categories), 
+            task_df['category'].isin(categories_to_aggregate), 
             task_df['category'], 
             task_df['sub_project_2'])
 
@@ -105,10 +103,12 @@ class Marvin_Processor():
 
         return task_df
 
-    def get_task_df():
+    def get_latest_data(username: str):
+        
+        server_db = Marvin_Processor.get_couch_server_db(username)
 
-        categories = list(Marvin_Processor.server_DB.find({'selector': {'db': 'Categories'}}))
-        all_tasks = Marvin_Processor.server_DB.find({'selector': {'db': 'Tasks'}})
+        categories = list(server_db.find({'selector': {'db': 'Categories'}}))
+        all_tasks = server_db.find({'selector': {'db': 'Tasks'}})
 
         task_df = pd.concat(map(Marvin_Processor.parse_task, all_tasks, repeat(categories)))
         task_df = task_df[task_df['day'] != 'unassigned']

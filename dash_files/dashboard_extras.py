@@ -6,14 +6,15 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 
 from data_getters.utils import get_latest_file
-from data_getters.get_marvin_data import format_task_df
-from data_getters.get_exist_data import format_exist_df, key_habits
+from data_getters.get_marvin_data import Marvin_Processor
+from data_getters.get_exist_data import Exist_Processor
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-habit_df = format_exist_df(get_latest_file(file_prefix = 'exist_data'))
-task_df = format_task_df(get_latest_file(file_prefix = 'marvin_tasks'))
+habit_df = Exist_Processor.format_exist_df(get_latest_file(file_prefix = 'exist_data'))
+task_df = Marvin_Processor.format_task_df(get_latest_file(file_prefix = 'marvin_tasks'))
+finance_df = get_latest_file(file_prefix = 'daily_finances')
 
 @app.callback(
     Output("habit_tracker_scorecard", "data"), 
@@ -27,7 +28,7 @@ def habit_tracker_scorecard(month, year):
     daily_total_df = filtered_df.groupby(['attribute', 'year', 'month']).agg({'achieved': 'sum'}).astype(int).reset_index(drop = False)
     daily_total_df['day'] = 1
     daily_total_df['datetime'] = pd.to_datetime(daily_total_df[['year', 'month', 'day']])
-    daily_total_df['total'] = len(key_habits)
+    daily_total_df['total'] = len(Exist_Processor.key_habits)
 
     if month == datetime.now().month and year == datetime.now().year:
         daily_total_df['month_days'] = datetime.now().day - 1

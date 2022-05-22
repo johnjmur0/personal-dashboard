@@ -7,14 +7,13 @@ import requests
 
 class Finances_Processor():
 
-    #TODO put in config file (housing param makes it annoying). Ideally I could get from Mint
-    #TODO handle bills with housing actually
-    def get_general_budget(housing_payment: int):
+    #TODO Ideally I can get budget values from Mint
+    def get_general_budget(user_config: dict):
         
-        return pd.DataFrame(data = {
-            'category': ['housing', 'groceries', 'discretionary'],
-            'budget': [housing_payment * 1.05, -400, -750]
-        })
+        budget_df = pd.DataFrame(data = user_config['finances_config']['general_budget'], index = [0]).T.reset_index(drop = False) \
+            .rename(columns = {'index': 'category', 0: 'budget'})
+
+        return budget_df
     
     def send_finance_request_generic(method: str, user_name: str, read_cache: bool = False):
 

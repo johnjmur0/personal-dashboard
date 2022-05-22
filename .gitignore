@@ -130,3 +130,4 @@ dmypy.json
 
 #raw data
 temp_cache/
+user_config/

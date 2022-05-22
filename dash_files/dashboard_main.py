@@ -5,15 +5,11 @@ import plotly.express as px
 import pandas as pd
 from datetime import datetime
 
-from data_getters.utils import get_latest_file
+from data_getters.utils import get_latest_file, get_user_config
 from data_getters.finances import Finances_Processor
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server = server, external_stylesheets=[dbc.themes.BOOTSTRAP])
-
-finance_df = get_latest_file(file_prefix = 'daily_finances')
-month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
-account_df = get_latest_file(file_prefix = 'account_totals')
 
 @app.callback(
     Output("savings_line_plot", "figure"),
@@ -21,22 +17,22 @@ account_df = get_latest_file(file_prefix = 'account_totals')
     Input("historical_start_year", "value"))
 def savings_line_plot(monthly_saving_target: int, historical_start_year: int):
 
-    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
+    graph_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
 
-    fig = px.line(month_sum_df, x = 'datetime', y= 'total')
+    fig = px.line(graph_df, x = 'datetime', y= 'total')
     fig.add_shape(
         type='line',
-        x0 = month_sum_df['datetime'].min(),
+        x0 = graph_df['datetime'].min(),
         y0 = int(monthly_saving_target),
-        x1 = month_sum_df['datetime'].max(),
+        x1 = graph_df['datetime'].max(),
         y1 = int(monthly_saving_target),
         line = dict(color='Black',),
         xref = 'x',
         yref = 'y')
 
     monthly_income = finance_df[
-        (finance_df['month'] == month_sum_df['datetime'].max().month - 1) & 
-        (finance_df['year'] == month_sum_df['datetime'].max().year) & 
+        (finance_df['month'] == graph_df['datetime'].max().month - 1) & 
+        (finance_df['year'] == graph_df['datetime'].max().year) & 
         (finance_df['category'] == 'income')]['total'].sum()
 
     avg_spend = finance_df[
@@ -47,12 +43,14 @@ def savings_line_plot(monthly_saving_target: int, historical_start_year: int):
     shortfall = (avg_spend + monthly_income) - monthly_saving_target
 
     fig.add_annotation(
-        x = month_sum_df['datetime'].median(), 
-        y = month_sum_df['total'].max() * 1.1,
+        x = graph_df['datetime'].median(), 
+        y = graph_df['total'].max() * 1.1,
         text = f"Avg. profit diff: ${int(round(shortfall, -1))}",
         showarrow = False,    
         font = dict(size=18),
         yshift = 0)
+
+    fig.update_layout(margin = dict(l = 10, r = 10, t = 50, b = 10), yaxis_title=None, xaxis_title=None)
 
     return fig
 
@@ -62,7 +60,13 @@ def savings_line_plot(monthly_saving_target: int, historical_start_year: int):
     Input("historical_start_year", "value"))
 def spending_line_plot(profit_target: int, historical_start_year: int):
 
-    month_sum_df = month_sum_df[month_sum_df['year'] >= historical_start_year]
+    graph_df = finance_df[
+        (finance_df['year'] >= historical_start_year) & 
+        ~(finance_df['category'].isin(['income', 'bonus']))] \
+        .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
+
+    graph_df['day'] = 1
+    graph_df['datetime'] = pd.to_datetime(graph_df[['year', 'month', 'day']])
 
     monthly_income = finance_df[
         (finance_df['month'] == month_sum_df['datetime'].max().month - 1) & 
@@ -70,27 +74,28 @@ def spending_line_plot(profit_target: int, historical_start_year: int):
         (finance_df['category'] == 'income')]['total'].sum()
         
     monthly_spending_target = (monthly_income - profit_target) * -1
-    avg_spending_diff = month_sum_df['total'].mean() - monthly_spending_target
-    fig = px.line(month_sum_df, x = 'datetime', y= 'total')
+    avg_spending_diff = graph_df['total'].mean() - monthly_spending_target
+    fig = px.line(graph_df, x = 'datetime', y= 'total')
 
     fig.add_shape(
         type='line',
-        x0 = month_sum_df['datetime'].min(),
+        x0 = graph_df['datetime'].min(),
         y0 = int(monthly_spending_target),
-        x1 = month_sum_df['datetime'].max(),
+        x1 = graph_df['datetime'].max(),
         y1 = int(monthly_spending_target),
         line = dict(color='Black',),
         xref = 'x',
         yref = 'y')
 
     fig.add_annotation(
-        x = month_sum_df['datetime'].median(), 
-        y = month_sum_df['total'].max() * 1.1,
+        x = graph_df['datetime'].median(), 
+        y = graph_df['total'].max() * 1.1,
         text = f"Avg. spending diff: ${int(round(avg_spending_diff, -1))}",
         showarrow = False,    
         font = dict(size=18),
         yshift = 0)
 
+    fig.update_layout(margin = dict(l = 10, r = 10, t = 50, b = 10), yaxis_title=None, xaxis_title=None)
 
     return fig
 
@@ -102,9 +107,12 @@ def spending_line_plot(profit_target: int, historical_start_year: int):
     Input("housing_payment", "value"))
 def monthly_finance_barchart(month: int, year: int, profit_target: int, housing_payment: int):
     
-    filter_df = month_sum_df[(month_sum_df['year'] == year) & (month_sum_df['month'] == month)]    
+    filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)].groupby('category').agg({'total': 'sum'}).reset_index(drop = False) 
 
-    filter_df = filter_df.merge(Finances_Processor.get_general_budget(housing_payment), how = 'left', on = 'category')
+    #TODO handle bills with housing for real, not multiplier
+    budget_df.loc[budget_df['category'] == 'housing', 'budget'] = housing_payment * 1.05
+
+    filter_df = filter_df.merge(budget_df, how = 'left', on = 'category')
 
     housing_adder = housing_payment - filter_df[filter_df['category'] == 'housing']['total'].sum()
     sum_df = pd.DataFrame(data = {
@@ -211,30 +219,33 @@ def accounts_table(profit_target: int, housing_payment: int, saving_months: int,
     final_cols = ['bank', 'investment', 'cash savings', 'excess savings', 'income', 'spending', 'housing', 'savings',  'investments']
     final_df = pd.melt(final_df, id_vars = [], value_vars = final_cols)
     
-    final_df['total'] =  round(final_df['value'], -1)
+    final_df['total'] = round(final_df['value'], -1)
     final_df.drop(columns = ['value'], inplace = True)
     final_df = final_df.apply(lambda x: [f'${y:,.0f}'for y in x] if x.name=='total' else x)
 
     return final_df.to_dict('records'), [{"name": i, "id": i} for i in final_df.columns]
 
-year_dropdown = dcc.Dropdown(
-                    id="finance_year_dropdown",
-                    options=finance_df['year'].unique(),
-                    value=datetime.now().year,
-                    clearable=False)
+def year_dropdown():
+    
+    return dcc.Dropdown(
+        id="finance_year_dropdown",
+        options=list(range(datetime.now().year - 4, datetime.now().year + 1)),
+        value=datetime.now().year,
+        clearable=False)
 
-month_dropdown = dcc.Dropdown(
-                    id="finance_month_dropdown",
-                    options=list(range(1, 13)),
-                    value=datetime.now().month,
-                    clearable=False)
+def month_dropdown():
+    return dcc.Dropdown(
+        id="finance_month_dropdown",
+        options=list(range(1, 13)),
+        value=datetime.now().month,
+        clearable=False)
 
 app.layout = dbc.Container([
 
     dbc.Row(
     [
-        dbc.Col(html.Div(year_dropdown), width = {'size': 3 }),
-        dbc.Col(html.Div(month_dropdown), width = {'size': 3 }),
+        dbc.Col(html.Div(year_dropdown()), width = {'size': 3 }),
+        dbc.Col(html.Div(month_dropdown()), width = {'size': 3 }),
     ],
         justify="start",
         className = 'g-0'
@@ -307,4 +318,14 @@ app.layout = dbc.Container([
 )
 
 if __name__ == '__main__':
+    
+    user_name = 'jjm'
+    user_config = get_user_config(user_name)
+    
+    budget_df = Finances_Processor.get_general_budget(user_config)
+    
+    finance_df = get_latest_file(file_prefix = 'daily_finances')
+    month_sum_df = Finances_Processor.get_month_sum_df(finance_df)
+    account_df = get_latest_file(file_prefix = 'account_totals')
+
     app.run_server(debug=True)
