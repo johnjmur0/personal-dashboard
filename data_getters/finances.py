@@ -55,22 +55,64 @@ class Finances_Dashboard_Helpers():
 
         return budget_df
 
-    def get_month_sum_df(finance_df: pd.DataFrame):
+    def get_month_sum_df(finance_df: pd.DataFrame, remove_category_list = ['bonus', 'investment']):
         
-        regular_finances = finance_df[~finance_df['category'].isin(['bonus', 'investment'])]
-        month_sum_df = regular_finances.groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
+        regular_finances = finance_df[~finance_df['category'].isin(remove_category_list)]
+        month_sum_df = regular_finances \
+            .groupby(['year', 'month']).agg({'total': 'sum'}).reset_index(drop = False)
 
         month_sum_df['day'] = 1
         month_sum_df['datetime'] = pd.to_datetime(month_sum_df[['year', 'month', 'day']])
 
         return month_sum_df
 
-    def get_budget_shortfall(finance_df: pd.DataFrame, profit_target: int, month: int, year: int, historical_start_year: int):
+    def create_spend_budget_df(
+        finance_df: pd.DataFrame, 
+        budget_df: pd.DataFrame, 
+        year: int, 
+        month: int,
+        housing_payment: int,
+        profit_target: int):
 
-        monthly_income = finance_df[
+        filter_df = finance_df[(finance_df['year'] == year) & (finance_df['month'] == month)] \
+        .groupby('category').agg({'total': 'sum'}).reset_index(drop = False) 
+
+        #TODO handle bills with housing for real, not multiplier
+        budget_df.loc[budget_df['category'] == 'housing', 'budget'] = housing_payment * 1.05
+
+        filter_df = filter_df.merge(budget_df, how = 'left', on = 'category')
+
+        current_housing_payment = filter_df[filter_df['category'] == 'housing']['total'].sum()
+        housing_adder = housing_payment - current_housing_payment
+
+        filter_df = pd.concat([
+            filter_df, 
+            pd.DataFrame(data = {
+            'year': [year],
+            'month': [month],
+            'category': 'profit/loss',
+            'budget': [profit_target],
+            'total': [filter_df['total'].sum() + housing_adder]
+        })])
+        
+        filter_df = filter_df[abs(filter_df['total']) > 100]
+
+        return pd.melt(
+            filter_df, 
+            id_vars = ['category', 'year', 'month'], 
+            value_vars = ['total', 'budget'])
+
+    def get_monthly_income(finance_df: pd.DataFrame, month: int, year: int):
+
+        return finance_df[
             (finance_df['month'] == month) & 
             (finance_df['year'] == year) & 
             (finance_df['category'] == 'income')]['total'].sum()
+
+
+    def get_budget_shortfall(finance_df: pd.DataFrame, profit_target: int, month: int, year: int, historical_start_year: int):
+
+        monthly_income = Finances_Dashboard_Helpers.get_monthly_income(finance_df, month, year)
 
         avg_spend = finance_df[
             (finance_df['year'] >= historical_start_year) & 
