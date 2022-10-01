@@ -7,7 +7,7 @@ import pandas as pd
 from datetime import datetime
 
 from data_getters.utils import get_latest_file, get_user_config
-from data_getters.finances import Finances_Dashboard_Helpers
+from data_getters.get_finances import Finances_Dashboard_Helpers
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP])
