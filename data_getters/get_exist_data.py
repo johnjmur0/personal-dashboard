@@ -147,7 +147,7 @@ class Exist_Processor:
         )
 
         date_str = exist_df["date"].max()
-        exist_df.to_csv(f"./temp_cache/exist_data_{date_str}.csv")
+        exist_df.to_csv(f"./temp_cache/exist_data_{date_str}.csv", index=False)
 
 
 class Exist_Dashboard_Helpers:
@@ -157,6 +157,12 @@ class Exist_Dashboard_Helpers:
             pd.DataFrame(data=user_config["exist_config"]["key_habits"], index=[0])
             .T.reset_index(drop=False)
             .rename(columns={"index": "attribute", 0: "target"})
+        )
+
+        exist_df["attribute"] = exist_df["attribute"].str.replace(" ", "_").str.lower()
+        exist_df.replace(
+            {"attribute": {"bedtime": "sleep_start", "wake_time": "sleep_end"}},
+            inplace=True,
         )
 
         exist_df["value"] = exist_df["value"].fillna(0)
@@ -185,6 +191,7 @@ class Exist_Dashboard_Helpers:
         )
 
         habit_df["date"] = pd.to_datetime(habit_df["date"])
+        habit_df = habit_df[habit_df["date"].dt.date != datetime.now().date()]
         habit_df["year"] = habit_df["date"].dt.year
         habit_df["month"] = habit_df["date"].dt.month
 

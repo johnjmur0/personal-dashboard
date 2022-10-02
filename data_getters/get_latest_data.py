@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     user_name = "jjm"  # sys.argv[1]
 
-    Exist_Processor.get_latest_data(user_name)
+    #Exist_Processor.get_latest_data(user_name)
 
     habit_df = Exist_Dashboard_Helpers.format_exist_df(
         get_latest_file(file_prefix="exist_data"), get_user_config("jjm")
