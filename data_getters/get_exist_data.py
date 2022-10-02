@@ -60,17 +60,6 @@ class Exist_Processor:
 
             response_df = pd.concat([response_df, attr_df])
 
-        # date_range = pd.date_range(
-        #     start=pd.to_datetime(f"{request_date.month}, /1/, {request_date.year}"),
-        #     end=request_date,
-        #     freq="D",
-        # )
-
-        # if len(date_range) > len(response_df):
-        #     return pd.DataFrame()
-
-        # response_df["date"] = date_range
-
         return response_df
 
     def get_attributes_df(date_range: pd.date_range, login_dict: dict):
@@ -173,6 +162,11 @@ class Exist_Dashboard_Helpers:
             .merge(key_habits_df, on="attribute", how="left")
         )
 
+        habit_df["date"] = pd.to_datetime(habit_df["date"])
+        habit_df = habit_df[habit_df["date"].dt.date != datetime.now().date()]
+
+        # TODO 10/2/22 the sleep data processing wrong b/c of (dumb) limitation on exist's side
+        # Using a manual excel sheet I keep for now until I get another solution
         habit_df["value"] = np.where(
             habit_df["attribute"] == "sleep_start",
             ((habit_df["value"] / 60) + 12) % 24,
@@ -190,8 +184,6 @@ class Exist_Dashboard_Helpers:
             habit_df["value"] >= habit_df["target"],
         )
 
-        habit_df["date"] = pd.to_datetime(habit_df["date"])
-        habit_df = habit_df[habit_df["date"].dt.date != datetime.now().date()]
         habit_df["year"] = habit_df["date"].dt.year
         habit_df["month"] = habit_df["date"].dt.month
 

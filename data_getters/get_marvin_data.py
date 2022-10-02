@@ -162,6 +162,7 @@ class Marvin_Processor:
         date_str = datetime.now().strftime("%Y-%m-%d")
         habits_df.to_csv(f"./temp_cache/marvin_habits_{date_str}.csv", index=False)
 
+
 class Marvin__Dashboard_Helpers:
     def format_task_df(task_df: pd.DataFrame, user_config: dict):
 

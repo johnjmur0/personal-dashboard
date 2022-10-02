@@ -4,13 +4,16 @@ import sys
 from get_finances import Finances_Processor
 from get_exist_data import Exist_Processor, Exist_Dashboard_Helpers
 from get_marvin_data import Marvin_Processor
+from get_manual_files import Manual_Processor
 from utils import get_latest_file, get_user_config
 
 if __name__ == "__main__":
 
     user_name = "jjm"  # sys.argv[1]
 
-    #Exist_Processor.get_latest_data(user_name)
+    Manual_Processor.get_sleep_df(user_name)
+
+    Exist_Processor.get_latest_data(user_name)
 
     habit_df = Exist_Dashboard_Helpers.format_exist_df(
         get_latest_file(file_prefix="exist_data"), get_user_config("jjm")
