@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     user_name = "jjm"  # sys.argv[1]
 
-    Finances_Processor.get_mint_historical_data(user_name, read_cache=False)
+    Finances_Processor.get_mint_historical_data(user_name, read_cache=True)
 
     Exist_Processor.get_latest_data(user_name)
     Marvin_Processor.get_latest_data(user_name)
