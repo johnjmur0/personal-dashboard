@@ -103,8 +103,8 @@ def spending_line_plot(profit_target: int, historical_start_year: int):
 
 @app.callback(
     Output("monthly_finance_barchart", "figure"),
-    Input("finance_month_dropdown", "value"),
-    Input("finance_year_dropdown", "value"),
+    Input("month_dropdown", "value"),
+    Input("year_dropdown", "value"),
     Input("profit_target", "value"),
     Input("housing_payment", "value"),
 )
