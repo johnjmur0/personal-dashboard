@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import numpy as np
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from utils import get_user_config
 
@@ -45,6 +45,34 @@ class Exist_Processor:
         month_duration = math.ceil((end_date - start_date) / np.timedelta64(1, "M"))
         return pd.date_range(start=start_date, freq="M", periods=month_duration)
 
+    def parse_attribute_response(attributes_response, request_date: pd.Timestamp):
+
+        response_df = pd.DataFrame()
+        data = attributes_response.json()
+
+        for attribute in data["results"]:
+            label = attribute["label"]
+            if len(attribute["values"]) == 0:
+                continue
+            else:
+                attr_df = pd.DataFrame(attribute["values"])
+                attr_df["attribute"] = label
+
+            response_df = pd.concat([response_df, attr_df])
+
+        # date_range = pd.date_range(
+        #     start=pd.to_datetime(f"{request_date.month}, /1/, {request_date.year}"),
+        #     end=request_date,
+        #     freq="D",
+        # )
+
+        # if len(date_range) > len(response_df):
+        #     return pd.DataFrame()
+
+        # response_df["date"] = date_range
+
+        return response_df
+
     def get_attributes_df(date_range: pd.date_range, login_dict: dict):
 
         attributes_df = pd.DataFrame()
@@ -53,36 +81,61 @@ class Exist_Processor:
 
         for date in date_range:
 
-            date_str = str(date).split(" ")[0]
             count = date.daysinmonth
 
-            date_params = f"?limit={count}&date_max={date_str}"
+            date_params = f"?days={count}&date_max={date.date()}"
 
             request_str = (
                 Exist_Processor.exist_server_url
                 + Exist_Processor.attributes_endpoint
                 + date_params
             )
+
             attributes_response = requests.get(request_str, headers=token_header)
 
-            response_df = pd.DataFrame(attributes_response.json())
-
-            response_df["date"] = pd.date_range(
-                start=pd.to_datetime(f"{date.month}, /1/, {date.year}"),
-                end=date,
-                freq="D",
+            response_df = Exist_Processor.parse_attribute_response(
+                attributes_response, date
             )
+
+            while attributes_response.json()["next"] is not None:
+
+                next_page_request = attributes_response.json()["next"]
+
+                attributes_response = requests.get(
+                    next_page_request, headers=token_header
+                )
+
+                next_page_df = Exist_Processor.parse_attribute_response(
+                    attributes_response, date
+                )
+
+                response_df = pd.concat([response_df, next_page_df])
+
             attributes_df = pd.concat([attributes_df, response_df])
 
-        ret_df = pd.DataFrame()
-        for index, row in attributes_df.iterrows():
+        return attributes_df
 
-            df = pd.DataFrame(row["results"]["values"])
-            df["attribute"] = row["results"]["name"]
-            df["date"] = row["date"]
-            ret_df = pd.concat([ret_df, df])
+    def get_page(page):
 
-        return ret_df
+        response = requests.get(
+            url,
+            params={"page": page, "limit": 100},
+            headers={"Authorization": f"Token {TOKEN}"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+
+            for attribute in data["results"]:
+                label = attribute["label"]
+                value = attribute["values"][0]["value"]
+                attributes[label] = value
+
+            if data["next"] is not None:
+                get_page(page + 1)
+
+        else:
+            print("Error!", response.content)
 
     def get_latest_data(username: str):
 
@@ -93,7 +146,7 @@ class Exist_Processor:
             Exist_Processor.get_date_range(), login_dict
         )
 
-        date_str = exist_df["date"].max().date()
+        date_str = exist_df["date"].max()
         exist_df.to_csv(f"./temp_cache/exist_data_{date_str}.csv")
 
 
@@ -103,11 +156,13 @@ class Exist_Dashboard_Helpers:
         key_habits_df = (
             pd.DataFrame(data=user_config["exist_config"]["key_habits"], index=[0])
             .T.reset_index(drop=False)
-            .rename(columns={"index": "attribute", 0: "value"})
+            .rename(columns={"index": "attribute", 0: "target"})
         )
 
+        exist_df["value"] = exist_df["value"].fillna(0)
+
         habit_df = (
-            exist_df[exist_df["attribute"].isin(key_habits_df)]
+            exist_df[exist_df["attribute"].isin(key_habits_df["attribute"])]
             .astype({"value": "float64"})
             .merge(key_habits_df, on="attribute", how="left")
         )
@@ -125,14 +180,12 @@ class Exist_Dashboard_Helpers:
 
         habit_df["achieved"] = np.where(
             habit_df["attribute"].isin(["sleep_start", "sleep_end"]),
-            habit_df["value"] <= habit_df["success"],
-            habit_df["value"] >= habit_df["success"],
+            habit_df["value"] <= habit_df["target"],
+            habit_df["value"] >= habit_df["target"],
         )
 
         habit_df["date"] = pd.to_datetime(habit_df["date"])
-        habit_df[["year", "month"]] = [
-            habit_df["date"].dt.year,
-            habit_df["date"].dt.month,
-        ]
+        habit_df["year"] = habit_df["date"].dt.year
+        habit_df["month"] = habit_df["date"].dt.month
 
         return habit_df
