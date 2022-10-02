@@ -6,6 +6,7 @@ import plotly.express as px
 import pandas as pd
 from datetime import datetime
 
+from dash_files.dashboard_utils import year_dropdown, month_dropdown
 from data_getters.utils import get_latest_file, get_user_config
 from data_getters.get_finances import Finances_Dashboard_Helpers
 
@@ -270,25 +271,6 @@ def accounts_table(
     )
 
     return final_df.to_dict("records"), [{"name": i, "id": i} for i in final_df.columns]
-
-
-def year_dropdown():
-
-    return dcc.Dropdown(
-        id="finance_year_dropdown",
-        options=list(range(datetime.now().year - 4, datetime.now().year + 1)),
-        value=datetime.now().year,
-        clearable=False,
-    )
-
-
-def month_dropdown():
-    return dcc.Dropdown(
-        id="finance_month_dropdown",
-        options=list(range(1, 13)),
-        value=datetime.now().month,
-        clearable=False,
-    )
 
 
 app.layout = dbc.Container(
