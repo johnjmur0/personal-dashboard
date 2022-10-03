@@ -5,7 +5,7 @@ from itertools import repeat
 import pandas as pd
 import numpy as np
 
-from utils import milliseconds_in_hours, milliseconds_in_seconds, get_user_config
+from data_getters.utils import milliseconds_in_hours, milliseconds_in_seconds, get_user_config
 
 
 class Marvin_Processor:
@@ -154,13 +154,10 @@ class Marvin_Processor:
             pd.to_datetime(habits_df.index).isocalendar().week
         )
 
-        # for downstream
-        # test_df = habits_df.groupby(
-        #     ["week_number", "name", "period"], as_index=False
-        # ).agg({"count": "sum", "target": "mean"})
-
         date_str = datetime.now().strftime("%Y-%m-%d")
-        habits_df.to_csv(f"./temp_cache/marvin_habits_{date_str}.csv", index=False)
+        habits_df.reset_index(drop=False).to_csv(
+            f"./temp_cache/marvin_habits_{date_str}.csv", index=False
+        )
 
 
 class Marvin__Dashboard_Helpers:

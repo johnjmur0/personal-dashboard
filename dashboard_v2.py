@@ -15,6 +15,8 @@ from dash_files.dashboard_utils import (
 )
 from data_getters.utils import get_latest_file, get_user_config
 from data_getters.get_finances import Finances_Dashboard_Helpers
+from data_getters.get_exist_data import Exist_Dashboard_Helpers
+from data_getters.get_manual_files import Manual_Processor
 
 server = flask.Flask(__name__)
 app = Dash(__name__, server=server)
@@ -112,13 +114,21 @@ app.layout = html.Div(
 
 if __name__ == "__main__":
 
-    user_name = sys.argv[1]
-    # user_config = get_user_config(user_name)
+    user_name = "jjm"  # sys.argv[1]
+    user_config = get_user_config(user_name)
 
-    # budget_df = Finances_Dashboard_Helpers.get_general_budget(user_config)
+    exist_df = Exist_Dashboard_Helpers.format_exist_df(
+        get_latest_file(file_prefix="exist_data"), get_user_config("jjm")
+    )
 
-    # finance_df = get_latest_file(file_prefix="daily_finances")
-    # month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
-    # account_df = get_latest_file(file_prefix="account_totals")
+    day_rating = exist_df[exist_df["attribute"] == "mood"]
+    marvin_habits_df = get_latest_file(file_prefix="marvin_habits")
+    manual_sleep_df = Manual_Processor.get_sleep_df(user_name)
+
+    week_habits_df = marvin_habits_df.groupby(
+        ["name", "positive", "period", "week_number"], as_index=False
+    ).agg({"count": "sum", "target": "mean"})
+
+    day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
 
     app.run_server(debug=True)

@@ -1,5 +1,5 @@
 import pandas as pd
-from utils import get_user_config
+from data_getters.utils import get_user_config
 
 # Temp holdover for sleep data until I get a replacement for exist
 class Manual_Processor:

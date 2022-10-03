@@ -5,7 +5,7 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
-from utils import get_user_config
+from data_getters.utils import get_user_config
 
 
 class Exist_Processor:
