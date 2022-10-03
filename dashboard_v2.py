@@ -125,10 +125,25 @@ if __name__ == "__main__":
     marvin_habits_df = get_latest_file(file_prefix="marvin_habits")
     manual_sleep_df = Manual_Processor.get_sleep_df(user_name)
 
+    marvin_habits_df["year"] = pd.to_datetime(marvin_habits_df["timestamp"]).dt.year
+    marvin_habits_df["month"] = pd.to_datetime(marvin_habits_df["timestamp"]).dt.month
+
     week_habits_df = marvin_habits_df.groupby(
-        ["name", "positive", "period", "week_number"], as_index=False
+        ["name", "positive", "period", "week_number", "year", "month"], as_index=False
     ).agg({"count": "sum", "target": "mean"})
 
     day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
+
+    day_rating = (
+        day_rating.groupby(["year", "month", "week_number"], as_index=False)
+        .agg({"value": "mean"})
+        .head()
+    )
+
+    agg_df = (
+        week_habits_df.merge(day_rating.rename(columns={"value": "rating"}), how="left")
+        .merge(manual_sleep_df.rename(columns={"week": "week_number"}), how="left")
+        .sort_values(["year", "month", "week_number"])
+    )
 
     app.run_server(debug=True)
