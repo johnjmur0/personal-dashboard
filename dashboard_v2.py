@@ -87,7 +87,7 @@ def simple_indicator(value: int, target: int, title: str):
                 ]
             }
         },
-        width=350,
+        # width=350,
         height=250,
         shapes=[
             go.layout.Shape(
