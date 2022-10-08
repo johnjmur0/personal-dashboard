@@ -5,7 +5,8 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-from datetime import datetime
+import numpy as np
+import datetime
 
 from dash_files.dashboard_utils import (
     year_dropdown,
@@ -106,6 +107,20 @@ def simple_indicator(value: int, target: int, title: str):
     return fig
 
 
+@app.callback(
+    Output("scorecard_table", "data"),
+    Output("scorecard_table", "columns"),
+    Input("week_dropdown", "value"),
+    Input("year_dropdown", "value"),
+)
+def table_demo(week_num: int, year: int):
+
+    week_df = agg_df[(agg_df["year"] == year) & (agg_df["week_number"] == week_num)]
+    week_df["tuple"] = list(zip(week_df["count"], week_df["target"]))
+    week_df = week_df[["name", "count", "target"]]
+    return week_df.to_dict("records"), [{"name": i, "id": i} for i in week_df.columns]
+
+
 app.layout = dbc.Container(
     [
         dbc.Row(
@@ -119,7 +134,9 @@ app.layout = dbc.Container(
                 ),
                 dbc.Col(
                     html.Div(
-                        html.H1(children=datetime.now().strftime("%m/%d/%Y %a")),
+                        html.H1(
+                            children=datetime.datetime.now().strftime("%m/%d/%Y %a")
+                        ),
                         style={"width": "100%"},
                     ),
                     width={"size": 3},
@@ -160,47 +177,9 @@ app.layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(5, 6, "exercise"))]),
-                    width="auto",
+                    html.Div([dash_table.DataTable(id="scorecard_table", data=[])]),
                 ),
-                dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(4, 6, "good"))]),
-                    width="auto",
-                ),
-            ],
-            justify="center",
-            align="end",
-            className="g-0",
-        ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(4, 6, "reading"))]),
-                    width="auto",
-                ),
-                dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(4, 7, "bad"))]),
-                    width="auto",
-                ),
-            ],
-            justify="center",
-            align="start",
-            className="g-0",
-        ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(1, 6, "sleep"))]),
-                    width={"size": 3},
-                ),
-                dbc.Col(
-                    html.Div([dcc.Graph(figure=simple_indicator(1, 6, "ugly"))]),
-                    width={"size": 3},
-                ),
-            ],
-            justify="center",
-            align="center",
-            className="g-0",
+            ]
         ),
     ],
     fluid=True,
@@ -227,17 +206,35 @@ if __name__ == "__main__":
     ).agg({"count": "sum", "target": "mean"})
 
     day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
+    day_rating["name"] = "rating"
 
-    day_rating = (
-        day_rating.groupby(["year", "month", "week_number"], as_index=False)
-        .agg({"value": "mean"})
-        .head()
+    day_rating = day_rating.groupby(
+        ["year", "month", "week_number"], as_index=False
+    ).agg({"value": "mean", "target": "mean"})
+
+    agg_df = pd.concat(
+        [
+            week_habits_df[["name", "week_number", "year", "month", "count", "target"]],
+            day_rating.rename(columns={"value": "count"}),
+        ]
     )
 
-    agg_df = (
-        week_habits_df.merge(day_rating.rename(columns={"value": "rating"}), how="left")
-        .merge(manual_sleep_df.rename(columns={"week": "week_number"}), how="left")
-        .sort_values(["year", "month", "week_number"])
+    sleep_df = (
+        manual_sleep_df.melt(
+            id_vars="week", value_vars=["wakeup", "bedtime", "duration"]
+        )
+        .rename(columns={"week": "week_number", "variable": "name", "value": "count"})
+        .merge(
+            week_habits_df[["year", "month", "week_number"]].drop_duplicates(),
+            on="week_number",
+            how="left",
+        )
     )
+    sleep_df = sleep_df[~pd.isnull(sleep_df["year"])]
+    sleep_df["target"] = np.where(
+        sleep_df["name"] == "bedtime", datetime.time(22, 0, 0), datetime.time(6, 0, 0)
+    )
+
+    agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
 
     app.run_server(debug=True)
