@@ -19,7 +19,7 @@ from data_getters.get_exist_data import Exist_Dashboard_Helpers
 from data_getters.get_manual_files import Manual_Processor
 
 server = flask.Flask(__name__)
-app = Dash(__name__, server=server)
+app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 
 def make_indicator_ex():
@@ -87,29 +87,123 @@ def simple_indicator(value: int, target: int, title: str):
                 ]
             }
         },
+        width=350,
+        height=250,
+        shapes=[
+            go.layout.Shape(
+                type="rect",
+                xref="paper",
+                yref="paper",
+                x0=0,
+                y0=-0.1,
+                x1=1.01,
+                y1=1.02,
+                line={"width": 1, "color": "black"},
+            )
+        ],
     )
 
     return fig
 
 
-app.layout = html.Div(
-    children=[
-        html.H1(
-            children="Check-in Dashboard",
-        ),
-        aggregation_radio(),
-        year_dropdown(),
-        month_dropdown(),
-        week_dropdown(),
-        html.Div(
-            children=[
-                dcc.Graph(figure=simple_indicator(6, 6, "exercise")),
-                dcc.Graph(figure=simple_indicator(4, 6, "reading")),
-                dcc.Graph(figure=simple_indicator(1, 6, "sleep")),
+app.layout = dbc.Container(
+    [
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div(
+                        html.H1(children="Check-in Dashboard"),
+                        style={"width": "100%"},
+                    ),
+                    width={"size": 9},
+                ),
+                dbc.Col(
+                    html.Div(
+                        html.H1(children=datetime.now().strftime("%m/%d/%Y %a")),
+                        style={"width": "100%"},
+                    ),
+                    width={"size": 3},
+                ),
             ],
-            style={"width": "25%", "height": "25%"},
+            justify="start",
+            className="g-0",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(html.Div(year_dropdown()), width={"size": 4}),
+                dbc.Col(html.Div(month_dropdown()), width={"size": 4}),
+                dbc.Col(html.Div(week_dropdown()), width={"size": 4}),
+            ],
+            justify="start",
+            className="g-0",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div(
+                        [
+                            html.Label("Aggregation: "),
+                            aggregation_radio(),
+                        ],
+                        style={
+                            "width": "100%",
+                            "font-size": 20,
+                            "display": "flex",
+                        },
+                    ),
+                    width="auto",
+                ),
+            ],
+            justify="center",
+            className="g-0",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(5, 6, "exercise"))]),
+                    width="auto",
+                ),
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(4, 6, "good"))]),
+                    width="auto",
+                ),
+            ],
+            justify="center",
+            align="end",
+            className="g-0",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(4, 6, "reading"))]),
+                    width="auto",
+                ),
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(4, 7, "bad"))]),
+                    width="auto",
+                ),
+            ],
+            justify="center",
+            align="start",
+            className="g-0",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(1, 6, "sleep"))]),
+                    width={"size": 3},
+                ),
+                dbc.Col(
+                    html.Div([dcc.Graph(figure=simple_indicator(1, 6, "ugly"))]),
+                    width={"size": 3},
+                ),
+            ],
+            justify="center",
+            align="center",
+            className="g-0",
         ),
     ],
+    fluid=True,
 )
 
 if __name__ == "__main__":

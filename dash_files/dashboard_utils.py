@@ -40,4 +40,10 @@ def aggregation_radio():
         id="aggregation_radio",
         options=["week", "month", "year"],
         value="week",
+        inline=True,
+        inputStyle={
+            "margin-right": "3px",
+            "margin-left": "7px",
+            "margin-top": "3px",
+        },
     )
