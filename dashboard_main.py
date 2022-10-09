@@ -374,7 +374,7 @@ app.layout = dbc.Container(
 
 if __name__ == "__main__":
 
-    user_name = sys.argv[1]
+    user_name = "jjm"  # sys.argv[1]
     user_config = get_user_config(user_name)
 
     budget_df = Finances_Dashboard_Helpers.get_general_budget(user_config)

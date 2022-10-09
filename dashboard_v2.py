@@ -91,6 +91,7 @@ def table_habits(week_num: int, year: int):
 
 app.layout = dbc.Container(
     [
+        # Header
         dbc.Row(
             [
                 dbc.Col(
@@ -114,6 +115,7 @@ app.layout = dbc.Container(
             ],
             justify="between",
         ),
+        # Dropdowns
         dbc.Row(
             [
                 dbc.Col(html.Div(year_dropdown()), width={"size": 4}),
@@ -123,6 +125,7 @@ app.layout = dbc.Container(
             justify="start",
             className="g-0",
         ),
+        # Aggregation Radio
         dbc.Row(
             [
                 dbc.Col(
@@ -143,6 +146,7 @@ app.layout = dbc.Container(
             justify="center",
             className="g-0",
         ),
+        # Tables
         dbc.Row(
             [
                 dbc.Col(
@@ -212,12 +216,7 @@ if __name__ == "__main__":
     week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
     sleep_df = Manual_Dashboard_Helpers.format_sleep_df(user_config=user_config)
 
-    agg_df = pd.concat(
-        [
-            week_habits_df,
-            day_rating,
-        ]
-    )
+    agg_df = pd.concat([week_habits_df,day_rating])
 
     sleep_df = sleep_df.merge(
         week_habits_df[["year", "month", "week_number"]].drop_duplicates(),
