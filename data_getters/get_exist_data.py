@@ -5,7 +5,7 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
-from data_getters.utils import get_user_config
+from data_getters.utils import get_user_config, get_latest_file
 
 
 class Exist_Processor:
@@ -140,7 +140,7 @@ class Exist_Processor:
 
 
 class Exist_Dashboard_Helpers:
-    def format_exist_df(exist_df: pd.DataFrame, user_config: dict):
+    def format_exist_df(exist_df: pd.DataFrame, user_config: dict) -> pd.DataFrame:
 
         key_habits_df = (
             pd.DataFrame(data=user_config["exist_config"]["key_habits"], index=[0])
@@ -165,7 +165,10 @@ class Exist_Dashboard_Helpers:
         habit_df["date"] = pd.to_datetime(habit_df["date"])
         habit_df = habit_df[habit_df["date"].dt.date != datetime.now().date()]
 
-        # TODO 10/2/22 the sleep data processing wrong b/c of (dumb) limitation on exist's side
+        habit_df["year"] = habit_df["date"].dt.year
+        habit_df["month"] = habit_df["date"].dt.month
+
+        # region TODO 10/2/22 the sleep data processing wrong b/c of (dumb) limitation on exist's side
         # Using a manual excel sheet I keep for now until I get another solution
         habit_df["value"] = np.where(
             habit_df["attribute"] == "sleep_start",
@@ -183,8 +186,29 @@ class Exist_Dashboard_Helpers:
             habit_df["value"] <= habit_df["target"],
             habit_df["value"] >= habit_df["target"],
         )
-
-        habit_df["year"] = habit_df["date"].dt.year
-        habit_df["month"] = habit_df["date"].dt.month
+        # endregion
 
         return habit_df
+
+    def get_weekly_rating_df(
+        formatted_exist_df: pd.DataFrame = None, user_config: dict = None
+    ) -> pd.DataFrame:
+
+        if formatted_exist_df is None:
+            exist_df = get_latest_file(file_prefix="exist_data")
+            formatted_exist_df = Exist_Dashboard_Helpers.format_exist_df(
+                exist_df, user_config
+            )
+
+        day_rating = formatted_exist_df[formatted_exist_df["attribute"] == "mood"]
+
+        day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
+
+        day_rating = day_rating.groupby(
+            ["year", "month", "week_number"], as_index=False
+        ).agg({"value": "mean", "target": "mean"})
+
+        day_rating["name"] = "Rating"
+        day_rating["positive"] = True
+
+        return day_rating

@@ -5,7 +5,12 @@ from itertools import repeat
 import pandas as pd
 import numpy as np
 
-from data_getters.utils import milliseconds_in_hours, milliseconds_in_seconds, get_user_config
+from data_getters.utils import (
+    milliseconds_in_hours,
+    milliseconds_in_seconds,
+    get_user_config,
+    get_latest_file,
+)
 
 
 class Marvin_Processor:
@@ -160,8 +165,8 @@ class Marvin_Processor:
         )
 
 
-class Marvin__Dashboard_Helpers:
-    def format_task_df(task_df: pd.DataFrame, user_config: dict):
+class Marvin_Dashboard_Helpers:
+    def format_task_df(task_df: pd.DataFrame, user_config: dict) -> pd.DataFrame:
 
         marvin_config = user_config["marvin_config"]
         categories_to_aggregate = marvin_config["aggregate_categories"]
@@ -194,3 +199,26 @@ class Marvin__Dashboard_Helpers:
         task_df.rename(columns={"end_val": "category"}, inplace=True)
 
         return task_df
+
+    def format_habit_df(
+        habit_df: pd.DataFrame = None, user_config: dict = None
+    ) -> pd.DataFrame:
+
+        if habit_df is None:
+            habit_df = get_latest_file(file_prefix="marvin_habits")
+
+        habit_df["year"] = pd.to_datetime(habit_df["timestamp"]).dt.year
+        habit_df["month"] = pd.to_datetime(habit_df["timestamp"]).dt.month
+
+        group_cols = ["name", "positive", "week_number", "year", "month"]
+
+        # TODO handle these when get to aggreations, for now only 1
+        habit_df = habit_df[habit_df["period"] == "week"]
+
+        week_habits_df = habit_df.groupby(group_cols, as_index=False).agg(
+            {"count": "sum", "target": "mean"}
+        )
+
+        return week_habits_df[group_cols + ["count", "target"]].rename(
+            columns={"count": "value"}
+        )

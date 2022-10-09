@@ -18,95 +18,36 @@ from dash_files.dashboard_utils import (
 from data_getters.utils import get_latest_file, get_user_config
 from data_getters.get_finances import Finances_Dashboard_Helpers
 from data_getters.get_exist_data import Exist_Dashboard_Helpers
-from data_getters.get_manual_files import Manual_Processor
+from data_getters.get_marvin_data import Marvin_Dashboard_Helpers
+from data_getters.get_manual_files import Manual_Dashboard_Helpers
 
-pio.templates.default = "plotly_dark"
 server = flask.Flask(__name__)
 app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.DARKLY])
 
 
-def make_indicator_ex():
+def table_base(week_num: int, year: int):
 
-    fig = go.Figure()
+    week_df = agg_df[(agg_df["year"] == year) & (agg_df["week_number"] == week_num)]
+    week_df = week_df[["name", "value", "target", "positive"]]
 
-    fig.add_trace(
-        go.Indicator(
-            value=200,
-            delta={"reference": 160},
-            gauge={"axis": {"visible": False}},
-            domain={"row": 0, "column": 0},
-        )
+    sleep_cols = ["Wake", "Bed", "Duration"]
+
+    sleep_df = week_df[week_df["name"].isin(sleep_cols)].drop_duplicates()
+    rating_df = week_df[week_df["name"] == "Rating"]
+
+    agg_week_df = (
+        week_df[~week_df["name"].isin(sleep_cols + ["Rating"])]
+        .groupby(["name", "positive"], as_index=False)
+        .agg({"value": "sum", "target": "mean"})
     )
 
-    fig.add_trace(
-        go.Indicator(
-            value=120,
-            gauge={"shape": "bullet", "axis": {"visible": True}},
-            domain={"x": [0.05, 0.5], "y": [0.15, 0.35]},
-        )
+    rating_df = rating_df.groupby(["name", "positive"], as_index=False).agg(
+        {"value": "mean", "target": "mean"}
     )
 
-    fig.add_trace(
-        go.Indicator(mode="number+delta", value=300, domain={"row": 0, "column": 1})
-    )
-
-    fig.add_trace(go.Indicator(mode="delta", value=40, domain={"row": 1, "column": 1}))
-
-    fig.update_layout(
-        grid={"rows": 2, "columns": 2, "pattern": "independent"},
-        template={
-            "data": {
-                "indicator": [
-                    {
-                        "title": {"text": "Speed"},
-                        "mode": "number+delta+gauge",
-                        "delta": {"reference": 90},
-                    }
-                ]
-            }
-        },
-    )
-
-    return fig
-
-
-def simple_indicator(value: int, target: int, title: str):
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Indicator(mode="number+delta", value=value, domain={"row": 0, "column": 1})
-    )
-
-    fig.update_layout(
-        template={
-            "data": {
-                "indicator": [
-                    {
-                        "title": {"text": title},
-                        "mode": "number+delta+gauge",
-                        "delta": {"reference": target},
-                    }
-                ]
-            }
-        },
-        # width=350,
-        height=250,
-        shapes=[
-            go.layout.Shape(
-                type="rect",
-                xref="paper",
-                yref="paper",
-                x0=0,
-                y0=-0.1,
-                x1=1.01,
-                y1=1.02,
-                line={"width": 1, "color": "black"},
-            )
-        ],
-    )
-
-    return fig
+    return pd.concat([agg_week_df, rating_df, sleep_df])[
+        ["name", "value", "target", "positive"]
+    ]
 
 
 @app.callback(
@@ -115,24 +56,37 @@ def simple_indicator(value: int, target: int, title: str):
     Input("week_dropdown", "value"),
     Input("year_dropdown", "value"),
 )
-def table_demo(week_num: int, year: int):
+def table_habits(week_num: int, year: int):
 
-    week_df = agg_df[(agg_df["year"] == year) & (agg_df["week_number"] == week_num)]
-    week_df = week_df[["name", "count", "target", "positive"]]
+    all_data_df = table_base(week_num, year)
 
-    sleep_df = week_df[
-        week_df["name"].isin(["wakeup", "bedtime", "duration"])
-    ].drop_duplicates()
-    agg_week_df = (
-        week_df[~week_df["name"].isin(["wakeup", "bedtime", "duration"])]
-        .groupby(["name", "positive"], as_index=False)
-        .agg({"count": "sum", "target": "mean"})
+    habit_df = all_data_df[~all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
+
+    return habit_df.to_dict("records"), [{"name": i, "id": i} for i in habit_df.columns]
+
+
+@app.callback(
+    Output("supporting_table", "data"),
+    Output("supporting_table", "columns"),
+    Input("week_dropdown", "value"),
+    Input("year_dropdown", "value"),
+)
+def table_habits(week_num: int, year: int):
+
+    all_data_df = table_base(week_num, year)
+
+    support_df = all_data_df[all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
+
+    support_df = support_df[["name", "value"]]
+    support_df["value"] = np.where(
+        support_df["name"] != "Duration",
+        support_df["value"].apply(lambda x: x.strftime("%I:%M %p")),
+        support_df["value"].apply(lambda x: x.strftime("%I:%M")),
     )
 
-    ret_df = pd.concat([agg_week_df, sleep_df])
-    ret_df = ret_df[["name", "count", "target", "positive"]]
-
-    return ret_df.to_dict("records"), [{"name": i, "id": i} for i in ret_df.columns]
+    return support_df.to_dict("records"), [
+        {"name": i, "id": i} for i in support_df.columns
+    ]
 
 
 app.layout = dbc.Container(
@@ -208,19 +162,37 @@ app.layout = dbc.Container(
                                 style_data_conditional=[
                                     {
                                         "if": {
-                                            "filter_query": "({positive} contains 'true' && {count} >= {target}) || ({positive} contains 'false' && {count} <= {target})"
+                                            "filter_query": "({positive} contains 'true' && {value} >= {target}) || ({positive} contains 'false' && {value} <= {target})"
                                         },
                                         "backgroundColor": "#3D9970",
                                         "color": "white",
                                     },
                                     {
                                         "if": {
-                                            "filter_query": "({positive} contains 'true' && {count} < {target}) || ({positive} contains 'false' && {count} > {target})"
+                                            "filter_query": "({positive} contains 'true' && {value} < {target}) || ({positive} contains 'false' && {value} > {target})"
                                         },
                                         "backgroundColor": "#FF4136",
                                         "color": "white",
                                     },
                                 ],
+                            )
+                        ]
+                    ),
+                ),
+                dbc.Col(
+                    html.Div(
+                        [
+                            dash_table.DataTable(
+                                id="supporting_table",
+                                data=[],
+                                style_header={
+                                    "backgroundColor": "rgb(30, 30, 30)",
+                                    "color": "white",
+                                },
+                                style_data={
+                                    "backgroundColor": "rgb(50, 50, 50)",
+                                    "color": "white",
+                                },
                             )
                         ]
                     ),
@@ -236,59 +208,21 @@ if __name__ == "__main__":
     user_name = "jjm"  # sys.argv[1]
     user_config = get_user_config(user_name)
 
-    exist_df = Exist_Dashboard_Helpers.format_exist_df(
-        get_latest_file(file_prefix="exist_data"), get_user_config("jjm")
-    )
-
-    day_rating = exist_df[exist_df["attribute"] == "mood"]
-    marvin_habits_df = get_latest_file(file_prefix="marvin_habits")
-    manual_sleep_df = Manual_Processor.get_sleep_df(user_name)
-
-    marvin_habits_df["year"] = pd.to_datetime(marvin_habits_df["timestamp"]).dt.year
-    marvin_habits_df["month"] = pd.to_datetime(marvin_habits_df["timestamp"]).dt.month
-
-    week_habits_df = marvin_habits_df.groupby(
-        ["name", "positive", "period", "week_number", "year", "month"], as_index=False
-    ).agg({"count": "sum", "target": "mean"})
-
-    day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
-    day_rating["name"] = "rating"
-    day_rating["positive"] = True
-
-    day_rating = day_rating.groupby(
-        ["year", "month", "positive", "week_number"], as_index=False
-    ).agg({"value": "mean", "target": "mean"})
+    day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
+    week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
+    sleep_df = Manual_Dashboard_Helpers.format_sleep_df(user_config=user_config)
 
     agg_df = pd.concat(
         [
-            week_habits_df[
-                ["name", "positive", "week_number", "year", "month", "count", "target"]
-            ],
-            day_rating.rename(columns={"value": "count"}),
+            week_habits_df,
+            day_rating,
         ]
     )
 
-    sleep_df = (
-        manual_sleep_df.melt(
-            id_vars="week", value_vars=["wakeup", "bedtime", "duration"]
-        )
-        .rename(columns={"week": "week_number", "variable": "name", "value": "count"})
-        .merge(
-            week_habits_df[["year", "month", "week_number"]].drop_duplicates(),
-            on="week_number",
-            how="left",
-        )
-    )
-    sleep_df = sleep_df[~pd.isnull(sleep_df["year"])]
-    sleep_df["target"] = np.where(
-        sleep_df["name"] == "bedtime", datetime.time(22, 0, 0), datetime.time(6, 0, 0)
-    )
-    sleep_df["target"] = np.where(
-        sleep_df["name"] == "duration", datetime.time(8, 30, 0), sleep_df["target"]
-    )
-    sleep_df["positive"] = np.where(sleep_df["name"] == "duration", True, False)
-    sleep_df["count"] = sleep_df["count"].apply(
-        lambda x: x.replace(second=0, microsecond=0)
+    sleep_df = sleep_df.merge(
+        week_habits_df[["year", "month", "week_number"]].drop_duplicates(),
+        on="week_number",
+        how="left",
     )
 
     agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
