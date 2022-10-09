@@ -2,6 +2,7 @@ import sys
 import flask
 from dash import Dash, html, dcc, Input, Output, dash_table
 import dash_bootstrap_components as dbc
+import plotly.io as pio
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -19,8 +20,9 @@ from data_getters.get_finances import Finances_Dashboard_Helpers
 from data_getters.get_exist_data import Exist_Dashboard_Helpers
 from data_getters.get_manual_files import Manual_Processor
 
+pio.templates.default = "plotly_dark"
 server = flask.Flask(__name__)
-app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.DARKLY])
 
 
 def make_indicator_ex():
@@ -116,9 +118,21 @@ def simple_indicator(value: int, target: int, title: str):
 def table_demo(week_num: int, year: int):
 
     week_df = agg_df[(agg_df["year"] == year) & (agg_df["week_number"] == week_num)]
-    week_df["tuple"] = list(zip(week_df["count"], week_df["target"]))
-    week_df = week_df[["name", "count", "target"]]
-    return week_df.to_dict("records"), [{"name": i, "id": i} for i in week_df.columns]
+    week_df = week_df[["name", "count", "target", "positive"]]
+
+    sleep_df = week_df[
+        week_df["name"].isin(["wakeup", "bedtime", "duration"])
+    ].drop_duplicates()
+    agg_week_df = (
+        week_df[~week_df["name"].isin(["wakeup", "bedtime", "duration"])]
+        .groupby(["name", "positive"], as_index=False)
+        .agg({"count": "sum", "target": "mean"})
+    )
+
+    ret_df = pd.concat([agg_week_df, sleep_df])
+    ret_df = ret_df[["name", "count", "target", "positive"]]
+
+    return ret_df.to_dict("records"), [{"name": i, "id": i} for i in ret_df.columns]
 
 
 app.layout = dbc.Container(
@@ -177,7 +191,38 @@ app.layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col(
-                    html.Div([dash_table.DataTable(id="scorecard_table", data=[])]),
+                    html.Div(
+                        [
+                            dash_table.DataTable(
+                                id="scorecard_table",
+                                data=[],
+                                style_header={
+                                    "backgroundColor": "rgb(30, 30, 30)",
+                                    "color": "white",
+                                },
+                                style_data={
+                                    "backgroundColor": "rgb(50, 50, 50)",
+                                    "color": "white",
+                                },
+                                style_data_conditional=[
+                                    {
+                                        "if": {
+                                            "filter_query": "({positive} contains 'true' && {count} >= {target}) || ({positive} contains 'false' && {count} <= {target})"
+                                        },
+                                        "backgroundColor": "#3D9970",
+                                        "color": "white",
+                                    },
+                                    {
+                                        "if": {
+                                            "filter_query": "({positive} contains 'true' && {count} < {target}) || ({positive} contains 'false' && {count} > {target})"
+                                        },
+                                        "backgroundColor": "#FF4136",
+                                        "color": "white",
+                                    },
+                                ],
+                            )
+                        ]
+                    ),
                 ),
             ]
         ),
@@ -207,14 +252,17 @@ if __name__ == "__main__":
 
     day_rating["week_number"] = day_rating["date"].dt.isocalendar().week
     day_rating["name"] = "rating"
+    day_rating["positive"] = True
 
     day_rating = day_rating.groupby(
-        ["year", "month", "week_number"], as_index=False
+        ["year", "month", "positive", "week_number"], as_index=False
     ).agg({"value": "mean", "target": "mean"})
 
     agg_df = pd.concat(
         [
-            week_habits_df[["name", "week_number", "year", "month", "count", "target"]],
+            week_habits_df[
+                ["name", "positive", "week_number", "year", "month", "count", "target"]
+            ],
             day_rating.rename(columns={"value": "count"}),
         ]
     )
@@ -234,6 +282,10 @@ if __name__ == "__main__":
     sleep_df["target"] = np.where(
         sleep_df["name"] == "bedtime", datetime.time(22, 0, 0), datetime.time(6, 0, 0)
     )
+    sleep_df["target"] = np.where(
+        sleep_df["name"] == "duration", datetime.time(8, 30, 0), sleep_df["target"]
+    )
+    sleep_df["positive"] = np.where(sleep_df["name"] == "duration", True, False)
 
     agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
 

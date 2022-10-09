@@ -29,7 +29,7 @@ def week_dropdown():
     return dcc.Dropdown(
         id="week_dropdown",
         options=list(range(1, 53)),
-        value=datetime.now().isocalendar().week,
+        value=datetime.now().isocalendar().week - 1,
         clearable=False,
     )
 
