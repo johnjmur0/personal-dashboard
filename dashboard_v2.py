@@ -144,20 +144,21 @@ app.layout = dbc.Container(
                         html.H1(children="Check-in Dashboard"),
                         style={"width": "100%"},
                     ),
-                    width={"size": 9},
+                    width={"size": 7},
                 ),
                 dbc.Col(
                     html.Div(
                         html.H1(
-                            children=datetime.datetime.now().strftime("%m/%d/%Y %a")
+                            children=datetime.datetime.now().strftime(
+                                "%m/%d/%y %a. #%V"
+                            )
                         ),
-                        style={"width": "100%"},
+                        style={"width": "100%", "text-align": "right"},
                     ),
-                    width={"size": 3},
+                    width={"size": 4},
                 ),
             ],
-            justify="start",
-            className="g-0",
+            justify="between",
         ),
         dbc.Row(
             [
@@ -286,6 +287,9 @@ if __name__ == "__main__":
         sleep_df["name"] == "duration", datetime.time(8, 30, 0), sleep_df["target"]
     )
     sleep_df["positive"] = np.where(sleep_df["name"] == "duration", True, False)
+    sleep_df["count"] = sleep_df["count"].apply(
+        lambda x: x.replace(second=0, microsecond=0)
+    )
 
     agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
 
