@@ -70,11 +70,6 @@ def accounts_table(
     historical_start_year: int = 2022,
 ):
 
-    month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
-
-    month_sum_df = month_sum_df[month_sum_df["year"] >= historical_start_year]
-    month_sum_df["free_cash"] = month_sum_df["total"] - profit_target
-
     pivot_account_df = pd.pivot_table(
         account_df[["account_type", "total"]], values="total", columns=["account_type"]
     )
@@ -377,7 +372,8 @@ app.layout = dbc.Container(
                     width={"size": 2},
                 ),
             ],
-            justify="between",
+            justify="around",
+            align="center",
         ),
     ],
     fluid=True,
