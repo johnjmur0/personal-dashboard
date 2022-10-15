@@ -20,6 +20,7 @@ Other objectives were to:
   
 Since its totally custom to me and connected to these data sources (some of which are subscriptions), it's not available for public use at this time. 
 But if you're a Mint, Marvin, Exist user, feel to reach out or checkout how I've processed those. Each were unique in their own way. :)
+P.S. I wiped the commit history b/c when I was prototying I had some config info hardcoded.
 
 Here's an example of how it looks now (with some actual data 0'd out): 
 ![image](https://user-images.githubusercontent.com/87945603/196010565-07a6f315-2d67-449b-a1c5-fd4f61aad8e6.png)
