@@ -138,21 +138,31 @@ def accounts_table(
     return final_df.to_dict("records"), [{"name": i, "id": i} for i in final_df.columns]
 
 
-def table_base(week_num: int, year: int):
+def table_base(week_num: int, month: int, year: int, agg_str: str):
 
-    week_df = agg_df[(agg_df["year"] == year) & (agg_df["week_number"] == week_num)]
-    week_df = week_df[["name", "value", "target", "positive"]]
+    if agg_str == "week":
+        select_df = agg_df[
+            (agg_df["year"] == year) & (agg_df["week_number"] == week_num)
+        ]
+    elif agg_str == "month":
+        select_df = agg_df[(agg_df["year"] == year) & (agg_df["month"] == month)]
+
+    select_df = select_df[["name", "value", "target", "positive", "week_number"]]
 
     sleep_cols = ["Wake", "Bed", "Duration"]
 
-    sleep_df = week_df[week_df["name"].isin(sleep_cols)].drop_duplicates()
-    rating_df = week_df[week_df["name"] == "Rating"]
+    sleep_df = select_df[select_df["name"].isin(sleep_cols)].drop_duplicates()
+    rating_df = select_df[select_df["name"] == "Rating"]
+
+    select_df["week_count"] = len(select_df["week_number"].unique())
 
     agg_week_df = (
-        week_df[~week_df["name"].isin(sleep_cols + ["Rating"])]
+        select_df[~select_df["name"].isin(sleep_cols + ["Rating"])]
         .groupby(["name", "positive"], as_index=False)
-        .agg({"value": "sum", "target": "mean"})
+        .agg({"value": "sum", "target": "mean", "week_count": "max"})
     )
+
+    agg_week_df["target"] = agg_week_df["target"] * agg_week_df["week_count"]
 
     rating_df = rating_df.groupby(["name", "positive"], as_index=False).agg(
         {"value": "mean", "target": "mean"}
@@ -168,11 +178,13 @@ def table_base(week_num: int, year: int):
     Output("scorecard_table", "data"),
     Output("scorecard_table", "columns"),
     Input("week_dropdown", "value"),
+    Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
+    Input("aggregation_radio", "value"),
 )
-def scorecard_table(week_num: int, year: int):
+def scorecard_table(week_num: int, month: int, year: int, agg_str: str):
 
-    all_data_df = table_base(week_num, year)
+    all_data_df = table_base(week_num, month, year, agg_str)
 
     habit_df = all_data_df[~all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
 
@@ -183,11 +195,13 @@ def scorecard_table(week_num: int, year: int):
     Output("supporting_table", "data"),
     Output("supporting_table", "columns"),
     Input("week_dropdown", "value"),
+    Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
+    Input("aggregation_radio", "value"),
 )
-def supporting_table(week_num: int, year: int):
+def supporting_table(week_num: int, month: int, year: int, agg_str: str):
 
-    all_data_df = table_base(week_num, year)
+    all_data_df = table_base(week_num, month, year, agg_str)
 
     support_df = all_data_df[all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
 
