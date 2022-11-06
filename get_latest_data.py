@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import subprocess
 from data_getters.get_exist_data import Exist_Dashboard_Helpers, Exist_Processor
 
@@ -16,13 +17,6 @@ if __name__ == "__main__":
     user_name = "jjm"  # sys.argv[1]
     user_config = get_user_config(user_name)
 
-    # TODO replace all these w/ config instead of user_name
-    Manual_Processor.get_sleep_df(user_config)
-
-    Exist_Processor.get_latest_data(user_name)
-
-    Marvin_Processor.get_latest_data(user_name)
-
     if CALL_MINT:
 
         dir = os.getcwd()
@@ -32,7 +26,16 @@ if __name__ == "__main__":
             ["powershell.exe", os.path.join(dir, api_launcer)], stdout=sys.stdout
         )
 
+        time.sleep(30)
+
         Finances_Processor.get_current_accounts(user_name)
         Finances_Processor.get_mint_historical_data(user_name)
+
+    # TODO replace all these w/ config instead of user_name
+    Manual_Processor.get_sleep_df(user_config)
+
+    Exist_Processor.get_latest_data(user_name)
+
+    Marvin_Processor.get_latest_data(user_name)
 
     Marvin_Processor.get_marvin_checkin_data(user_name)
