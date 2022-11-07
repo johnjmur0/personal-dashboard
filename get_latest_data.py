@@ -8,6 +8,7 @@ from data_getters.get_exist_data import Exist_Dashboard_Helpers, Exist_Processor
 from data_getters.get_finances import Finances_Processor
 from data_getters.get_manual_files import Manual_Processor
 from data_getters.get_marvin_data import Marvin_Processor
+from data_getters.get_mint_data import Mint_API_Getter
 from data_getters.utils import get_user_config
 
 CALL_MINT = True
@@ -19,15 +20,12 @@ if __name__ == "__main__":
 
     if CALL_MINT:
 
-        dir = os.getcwd()
-        api_launcer = "./data_getters/start_finance_api.ps1"
-
-        p = subprocess.Popen(
-            ["powershell.exe", os.path.join(dir, api_launcer)], stdout=sys.stdout
-        )
-
-        time.sleep(30)
-
+        mint_conn = Mint_API_Getter.get_mint_conn(user_config)
+        
+        investments_df = Mint_API_Getter.get_investments_df(mint_conn)
+        budgets_df = Mint_API_Getter.get_budgets_df(mint_conn)
+        accounts_df = Mint_API_Getter.get_accounts_df(mint_conn)
+        
         Finances_Processor.get_current_accounts(user_name)
         Finances_Processor.get_mint_historical_data(user_name)
 
