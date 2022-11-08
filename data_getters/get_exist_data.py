@@ -5,8 +5,7 @@ import numpy as np
 import requests
 from datetime import datetime, timedelta
 
-from data_getters.utils import get_user_config, get_latest_file
-
+from data_getters.utils import Data_Getter_Utils
 
 class Exist_Processor:
 
@@ -126,9 +125,8 @@ class Exist_Processor:
         else:
             print("Error!", response.content)
 
-    def get_latest_data(username: str):
+    def get_latest_data(user_config: dict):
 
-        user_config = get_user_config(username)
         login_dict = Exist_Processor.get_login_credentials(user_config)
 
         exist_df = Exist_Processor.get_attributes_df(
@@ -195,7 +193,7 @@ class Exist_Dashboard_Helpers:
     ) -> pd.DataFrame:
 
         if formatted_exist_df is None:
-            exist_df = get_latest_file(file_prefix="exist_data")
+            exist_df = Data_Getter_Utils.get_latest_file(file_prefix="exist_data")
             formatted_exist_df = Exist_Dashboard_Helpers.format_exist_df(
                 exist_df, user_config
             )

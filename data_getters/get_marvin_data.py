@@ -1,25 +1,18 @@
 import requests
 import couchdb
-from datetime import datetime
 from itertools import repeat
 import pandas as pd
 import numpy as np
 
-from data_getters.utils import (
-    milliseconds_in_hours,
-    milliseconds_in_seconds,
-    get_user_config,
-    get_latest_file,
-)
+from data_getters.utils import Data_Getter_Utils
 
 
 class Marvin_Processor:
 
     endpoint = "https://serv.amazingmarvin.com/api/"
 
-    def get_couch_server_db(username):
+    def get_couch_server_db(user_config: dict):
 
-        user_config = get_user_config(username)
         marvin_config = user_config["marvin_config"]
 
         couch = couchdb.Server(marvin_config["sync_server"])
@@ -43,7 +36,9 @@ class Marvin_Processor:
                 None
                 if len(task["times"]) == 0
                 else pd.to_datetime(
-                    datetime.fromtimestamp(task["times"][0] / milliseconds_in_seconds)
+                    datetime.fromtimestamp(
+                        task["times"][0] / Data_Getter_Utils.milliseconds_in_seconds
+                    )
                 )
             )
 
@@ -51,11 +46,13 @@ class Marvin_Processor:
                 None
                 if len(task["times"]) == 0
                 else pd.to_datetime(
-                    datetime.fromtimestamp(task["times"][1] / milliseconds_in_seconds)
+                    datetime.fromtimestamp(
+                        task["times"][1] / Data_Getter_Utils.milliseconds_in_seconds
+                    )
                 )
             )
 
-            duration = task["duration"] / milliseconds_in_hours
+            duration = task["duration"] / Data_Getter_Utils.milliseconds_in_hours
 
         return duration, start_time, end_time
 
@@ -90,7 +87,9 @@ class Marvin_Processor:
 
         time_estimate = task.get("timeEstimate")
         time_estimate = (
-            None if time_estimate is None else time_estimate / milliseconds_in_hours
+            None
+            if time_estimate is None
+            else time_estimate / Data_Getter_Utils.milliseconds_in_hours
         )
 
         return pd.DataFrame(
@@ -125,16 +124,16 @@ class Marvin_Processor:
         ]
 
         history_df["timestamp"] = (
-            history_df["marvin_time"] / milliseconds_in_seconds
+            history_df["marvin_time"] / Data_Getter_Utils.milliseconds_in_seconds
         ).map(datetime.fromtimestamp)
 
         history_df["timestamp"] = history_df["timestamp"].dt.date
 
         return history_df.set_index("timestamp")
 
-    def get_latest_data(user_name: str):
+    def get_latest_data(user_config: dict):
 
-        server_db = Marvin_Processor.get_couch_server_db(user_name)
+        server_db = Marvin_Processor.get_couch_server_db(user_config)
 
         categories = list(server_db.find({"selector": {"db": "Categories"}}))
         all_tasks = server_db.find({"selector": {"db": "Tasks"}})
@@ -144,8 +143,7 @@ class Marvin_Processor:
         )
         task_df = task_df[task_df["day"] != "unassigned"]
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        task_df.to_csv(f"./temp_cache/marvin_tasks_{date_str}.csv", index=False)
+        Data_Getter_Utils.write_temp_cache(task_df, "marvin_tasks")
 
     def get_marvin_checkin_data(user_name: str):
 
@@ -159,10 +157,7 @@ class Marvin_Processor:
             pd.to_datetime(habits_df.index).isocalendar().week
         )
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        habits_df.reset_index(drop=False).to_csv(
-            f"./temp_cache/marvin_habits_{date_str}.csv", index=False
-        )
+        Data_Getter_Utils.write_temp_cache(habits_df, "marvin_habits")
 
 
 class Marvin_Dashboard_Helpers:
@@ -205,7 +200,7 @@ class Marvin_Dashboard_Helpers:
     ) -> pd.DataFrame:
 
         if habit_df is None:
-            habit_df = get_latest_file(file_prefix="marvin_habits")
+            habit_df = Data_Getter_Utils.get_latest_file(file_prefix="marvin_habits")
 
         habit_df["year"] = pd.to_datetime(habit_df["timestamp"]).dt.year
         habit_df["month"] = pd.to_datetime(habit_df["timestamp"]).dt.month
