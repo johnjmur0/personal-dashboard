@@ -15,15 +15,15 @@ from data_getters.utils import Data_Getter_Utils
 class Mint_API_Getter:
 
     # https://github.com/mintapi/mintapi
-    def get_mint_conn(user_config: dict):
+    def get_mint_conn(login_config: dict):
 
         driver = Firefox(executable_path=GeckoDriverManager().install())
 
         return mintapi.Mint(
-            email=user_config["mint_login"]["login_email"],
-            password=user_config["mint_login"]["password"],
+            email=login_config["login_email"],
+            password=login_config["password"],
             mfa_method="soft-token",
-            mfa_token=user_config["mint_login"]["mfa_token"],
+            mfa_token=login_config["mfa_token"],
             headless=False,
             use_chromedriver_on_path=False,
             wait_for_sync_timeout=300,
@@ -79,7 +79,7 @@ class Mint_API_Getter:
 
         return accounts_df
 
-    def get_transactions_df(mint_conn):
+    def get_transactions_df(mint_conn, user_name: str):
 
         transactions = mint_conn.get_transaction_data(limit=1000000)
 
@@ -91,11 +91,13 @@ class Mint_API_Getter:
             transactions_df, ret_cols, ["name", "parentName"]
         )
 
-        Data_Getter_Utils.write_temp_cache(transactions_df, "mint_transactions_raw")
+        Data_Getter_Utils.write_temp_cache(
+            transactions_df, f"mint_transactions_raw_{user_name}"
+        )
 
         return transactions_df
 
-    def get_investments_df(mint_conn):
+    def get_investments_df(mint_conn, user_name: str):
 
         investments = mint_conn.get_investment_data()
 
@@ -110,11 +112,13 @@ class Mint_API_Getter:
 
         investments_df = Mint_API_Getter.process_mint_df(investments, ret_cols)
 
-        Data_Getter_Utils.write_temp_cache(investments_df, "mint_investments_raw")
+        Data_Getter_Utils.write_temp_cache(
+            investments_df, f"mint_investments_raw_{user_name}"
+        )
 
         return investments_df
 
-    def get_budgets_df(mint_conn):
+    def get_budgets_df(mint_conn, user_name: str):
 
         budgets = mint_conn.get_budget_data()
 
@@ -123,15 +127,17 @@ class Mint_API_Getter:
 
         budgets_df = Mint_API_Getter.expand_category_col(budgets_df, ret_cols, ["name"])
 
-        Data_Getter_Utils.write_temp_cache(budgets_df, "mint_budgets_raw")
+        Data_Getter_Utils.write_temp_cache(budgets_df, f"mint_budgets_raw_{user_name}")
 
         return budgets_df
 
 
 class Mint_Processor:
-    def clean_transactions(user_config: dict):
+    def clean_transactions(user_config: dict, user_name: str):
 
-        raw_transactions_df = Data_Getter_Utils.get_latest_file("mint_transactions_raw")
+        raw_transactions_df = Data_Getter_Utils.get_latest_file(
+            f"mint_transactions_raw_{user_name}"
+        )
 
         raw_transactions_df["parentName"] = np.where(
             raw_transactions_df["parentName"] == "Root",
@@ -139,32 +145,85 @@ class Mint_Processor:
             raw_transactions_df["parentName"],
         )
 
-        agg_categories_df = pd.melt(
-            pd.DataFrame(
-                dict(
-                    [
-                        (k, pd.Series(v))
-                        for k, v in user_config["aggregate_categories"].items()
-                    ]
-                )
-            )
-        )
-
-        agg_categories_df.rename(
-            columns={"variable": "category", "value": "name"}, inplace=True
-        )
-
         raw_transactions_df["date"] = pd.to_datetime(raw_transactions_df["date"])
 
         raw_transactions_df["year"] = raw_transactions_df["date"].dt.year
         raw_transactions_df["month"] = raw_transactions_df["date"].dt.month
+        raw_transactions_df["day"] = raw_transactions_df["date"].dt.day
+
+        def category_dict_to_df(category_dict: dict):
+
+            category_df = pd.melt(
+                pd.DataFrame(
+                    dict([(k, pd.Series(v)) for k, v in category_dict.items()])
+                )
+            )
+
+            category_df.rename(
+                columns={"variable": "category", "value": "name"},
+                inplace=True,
+            )
+
+            category_df = category_df[~pd.isnull(category_df["name"])]
+
+            return category_df
+
+        agg_categories_df = category_dict_to_df(user_config["aggregate_categories"])
+        meta_categories_df = category_dict_to_df(user_config["meta_categories"])
 
         agg_transactions_df = (
             raw_transactions_df.merge(
-                agg_categories_df[~pd.isnull(agg_categories_df["name"])], on="name"
+                meta_categories_df.rename(
+                    columns={"category": "meta_category", "name": "category"}
+                ).merge(agg_categories_df, on="category"),
+                on="name",
             )
-            .groupby(["year", "month", "category"], as_index=False)
+            .groupby(["year", "month", "day", "meta_category"], as_index=False)
             .agg({"amount": "sum"})
         )
 
+        agg_transactions_df["timestamp"] = pd.to_datetime(
+            agg_transactions_df[["year", "month", "day"]]
+        )
+
+        agg_transactions_df.rename(
+            columns={"meta_category": "category", "amount": "total"}, inplace=True
+        )
+
+        Data_Getter_Utils.write_temp_cache(
+            agg_transactions_df, f"daily_finances_{user_name}"
+        )
         return agg_transactions_df
+
+    def clean_accounts(user_config: dict, user_name: str):
+
+        raw_accounts_df = Data_Getter_Utils.get_latest_file(
+            f"mint_accounts_raw_{user_name}"
+        )
+
+        conditions = [
+            raw_accounts_df["type"].isin(
+                ["CreditAccount", "BankAccount", "CashAccount"]
+            ),
+            raw_accounts_df["type"].isin(["InvestmentAccount"]),
+            raw_accounts_df["type"].isin(["LoanAccount"]),
+        ]
+        choices = ["bank", "investment", "loan"]
+
+        raw_accounts_df["account_type"] = np.select(conditions, choices, default=np.nan)
+
+        clean_accounts_df = (
+            raw_accounts_df[raw_accounts_df["systemStatus"] == "ACTIVE"]
+            .groupby("account_type", as_index=False)
+            .agg({"currentBalance": "sum"})
+        )
+
+        clean_accounts_df.rename(
+            columns={"currentBalance": "total"}, inplace=True
+        )
+
+        Data_Getter_Utils.write_temp_cache(
+            clean_accounts_df, f"account_totals_{user_name}"
+        )
+
+        return clean_accounts_df

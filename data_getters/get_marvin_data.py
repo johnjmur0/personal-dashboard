@@ -1,3 +1,4 @@
+import datetime
 import requests
 import couchdb
 from itertools import repeat
@@ -36,7 +37,7 @@ class Marvin_Processor:
                 None
                 if len(task["times"]) == 0
                 else pd.to_datetime(
-                    datetime.fromtimestamp(
+                    datetime.date.fromtimestamp(
                         task["times"][0] / Data_Getter_Utils.milliseconds_in_seconds
                     )
                 )
@@ -46,7 +47,7 @@ class Marvin_Processor:
                 None
                 if len(task["times"]) == 0
                 else pd.to_datetime(
-                    datetime.fromtimestamp(
+                    datetime.date.fromtimestamp(
                         task["times"][1] / Data_Getter_Utils.milliseconds_in_seconds
                     )
                 )
@@ -125,13 +126,13 @@ class Marvin_Processor:
 
         history_df["timestamp"] = (
             history_df["marvin_time"] / Data_Getter_Utils.milliseconds_in_seconds
-        ).map(datetime.fromtimestamp)
+        ).map(datetime.date.fromtimestamp)
 
-        history_df["timestamp"] = history_df["timestamp"].dt.date
+        history_df["timestamp"] = pd.to_datetime(history_df["timestamp"])
 
         return history_df.set_index("timestamp")
 
-    def get_latest_data(user_config: dict):
+    def get_marvin_task_data(user_config: dict):
 
         server_db = Marvin_Processor.get_couch_server_db(user_config)
 
@@ -145,7 +146,7 @@ class Marvin_Processor:
 
         Data_Getter_Utils.write_temp_cache(task_df, "marvin_tasks")
 
-    def get_marvin_checkin_data(user_name: str):
+    def get_marvin_habit_data(user_name: str):
 
         server_db = Marvin_Processor.get_couch_server_db(user_name)
 
@@ -156,6 +157,8 @@ class Marvin_Processor:
         habits_df["week_number"] = habits_df["week_number"] = (
             pd.to_datetime(habits_df.index).isocalendar().week
         )
+
+        habits_df.reset_index(drop=False, inplace=True)
 
         Data_Getter_Utils.write_temp_cache(habits_df, "marvin_habits")
 

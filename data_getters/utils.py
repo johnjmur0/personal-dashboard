@@ -4,11 +4,12 @@ import glob
 import pandas as pd
 from datetime import datetime
 
-milliseconds_in_hours = 3600000
-milliseconds_in_seconds = 1000
-
 
 class Data_Getter_Utils:
+
+    milliseconds_in_hours = 3600000
+    milliseconds_in_seconds = 1000
+
     def write_temp_cache(df, data_name: str):
         date_str = datetime.now().strftime("%Y-%m-%d")
         df.to_csv(f"./temp_cache/{data_name}_{date_str}.csv", index=False)

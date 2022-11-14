@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from data_getters.utils import Data_Getter_Utils
 
+
 class Exist_Processor:
 
     exist_server_url = "https://exist.io/api/2/"
@@ -125,7 +126,7 @@ class Exist_Processor:
         else:
             print("Error!", response.content)
 
-    def get_latest_data(user_config: dict):
+    def get_exist_data(user_config: dict):
 
         login_dict = Exist_Processor.get_login_credentials(user_config)
 

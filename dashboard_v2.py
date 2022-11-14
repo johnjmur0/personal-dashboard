@@ -17,7 +17,7 @@ from dash_files.dashboard_utils import (
     week_dropdown,
     aggregation_radio,
 )
-from data_getters.utils import get_latest_file, get_user_config
+from data_getters.utils import Data_Getter_Utils
 from data_getters.get_finances import Finances_Dashboard_Helpers
 from data_getters.get_exist_data import Exist_Dashboard_Helpers
 from data_getters.get_marvin_data import Marvin_Dashboard_Helpers
@@ -396,7 +396,7 @@ app.layout = dbc.Container(
 if __name__ == "__main__":
 
     user_name = "jjm"  # sys.argv[1]
-    user_config = get_user_config(user_name)
+    user_config = Data_Getter_Utils.get_user_config(user_name)
 
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
     week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
@@ -413,8 +413,8 @@ if __name__ == "__main__":
     agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
 
     budget_df = Finances_Dashboard_Helpers.get_general_budget(user_config)
-    finance_df = get_latest_file(file_prefix="daily_finances")
+    finance_df = Data_Getter_Utils.get_latest_file(file_prefix="daily_finances")
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
-    account_df = get_latest_file(file_prefix="account_totals")
+    account_df = Data_Getter_Utils.get_latest_file(file_prefix="account_totals")
 
     app.run_server(debug=True)
