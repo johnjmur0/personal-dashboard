@@ -395,7 +395,7 @@ app.layout = dbc.Container(
 
 if __name__ == "__main__":
 
-    user_name = "jjm"  # sys.argv[1]
+    user_name = sys.argv[1]
     user_config = Data_Getter_Utils.get_user_config(user_name)
 
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)

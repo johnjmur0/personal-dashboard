@@ -13,12 +13,16 @@ CALL_MINT = False
 
 if __name__ == "__main__":
 
-    user_name = "jjm"  # sys.argv[1]
+    user_name = sys.argv[1]
     user_config = Data_Getter_Utils.get_user_config(user_name)
 
     if CALL_MINT:
 
         for user, creds in user_config["mint_login"].items():
+
+            if user == "dmg":
+                continue
+
             mint_conn = Mint_API_Getter.get_mint_conn(creds)
 
             transactions_df = Mint_API_Getter.get_transactions_df(mint_conn, user)

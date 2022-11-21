@@ -61,7 +61,7 @@ class Mint_API_Getter:
     def close_mint_conn(mint_conn):
         mint_conn.close()
 
-    def get_accounts_df(mint_conn):
+    def get_accounts_df(mint_conn, user_name: str):
 
         accounts = mint_conn.get_account_data()
 
@@ -75,7 +75,9 @@ class Mint_API_Getter:
 
         accounts_df = Mint_API_Getter.process_mint_df(accounts, ret_cols)
 
-        Data_Getter_Utils.write_temp_cache(accounts_df, "mint_accounts_raw")
+        Data_Getter_Utils.write_temp_cache(
+            accounts_df, f"mint_accounts_raw_{user_name}"
+        )
 
         return accounts_df
 
@@ -218,9 +220,7 @@ class Mint_Processor:
             .agg({"currentBalance": "sum"})
         )
 
-        clean_accounts_df.rename(
-            columns={"currentBalance": "total"}, inplace=True
-        )
+        clean_accounts_df.rename(columns={"currentBalance": "total"}, inplace=True)
 
         Data_Getter_Utils.write_temp_cache(
             clean_accounts_df, f"account_totals_{user_name}"
