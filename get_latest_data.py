@@ -9,7 +9,7 @@ from data_getters.get_marvin_data import Marvin_Processor
 from data_getters.get_mint_data import Mint_API_Getter, Mint_Processor
 from data_getters.utils import Data_Getter_Utils
 
-CALL_MINT = False
+CALL_MINT = True
 
 if __name__ == "__main__":
 
