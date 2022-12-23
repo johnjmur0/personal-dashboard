@@ -1,4 +1,5 @@
 import sys
+import time
 import flask
 from dash import Dash, html, dcc, Input, Output, dash_table
 from dash_bootstrap_templates import load_figure_template
@@ -8,6 +9,7 @@ import plotly.io as pio
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
+from pandas.api.types import CategoricalDtype
 import numpy as np
 import datetime
 
@@ -18,14 +20,19 @@ from dash_files.dashboard_utils import (
     aggregation_radio,
 )
 from data_getters.utils import Data_Getter_Utils
-from data_getters.get_finances import Finances_Dashboard_Helpers
+from data_getters.get_mint_data import Finances_Dashboard_Helpers
 from data_getters.get_exist_data import Exist_Dashboard_Helpers
 from data_getters.get_marvin_data import Marvin_Dashboard_Helpers
 from data_getters.get_manual_files import Manual_Dashboard_Helpers
 
-load_figure_template("darkly")
+# dbc_css = (
+#     "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.4/dbc.min.css"
+# )
+
+template_name = "superhero"
+load_figure_template(template_name)
 server = flask.Flask(__name__)
-app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.DARKLY])
+app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
 
 
 @app.callback(
@@ -39,28 +46,50 @@ def monthly_finance_barchart(month: int, year: int):
         finance_df, budget_df, year, month
     )
 
+    pivot_df = filter_df.pivot_table(
+        values="value", index=["category"], columns=["variable"]
+    )
+    pivot_df["diff"] = (pivot_df["total"] - pivot_df["budget"]) * -1
+    pivot_df["diff"] = np.where(abs(pivot_df["diff"]) == np.Inf, 0, pivot_df["diff"])
+    pivot_df.reset_index(drop=False, inplace=True)
+
+    pivot_df["positive"] = np.where(pivot_df["diff"] < 0, "Under-Budget", "Over-Budget")
+
     fig = px.bar(
-        filter_df,
-        x="category",
-        y="value",
-        color="variable",
+        pivot_df,
+        x="diff",
+        y="category",
+        color="positive",
         barmode="group",
         text_auto=".2s",
-        color_discrete_sequence=["blue", "grey"],
-        template="darkly",
+        template=template_name,
+        color_discrete_sequence=["#d9534f", "#5cb85c"],
     )
+
+    fig.add_vline(x=0, line_dash="dash", line_color="red")
 
     fig.update_traces(
         textfont_size=12, textangle=0, textposition="outside", cliponaxis=False
     )
-    fig.update_layout(margin=dict(r=0, l=0), yaxis_title=None, xaxis_title=None)
+    fig.update_layout(
+        margin=dict(r=0, l=0),
+        yaxis_title=None,
+        xaxis_title=None,
+        yaxis=dict(tickfont=dict(size=16)),
+        title={
+            "text": "Monthly Budget Evaluation",
+            "xanchor": "center",
+            "yanchor": "top",
+            "y": 0.95,
+            "x": 0.5,
+        },
+    )
 
     return fig
 
 
 @app.callback(
-    Output("accounts_table", "data"),
-    Output("accounts_table", "columns"),
+    Output("accounts_table", "children"),
     Input("profit_target", "value"),
     Input("saving_months", "value"),
 )
@@ -85,23 +114,22 @@ def accounts_table(
 
     avg_spend_df = avg_spend_df[~avg_spend_df["category"].isin(["loans", "bonus"])]
 
+    distinct_categories = ["paycheck", "investments", "rent"]
     monthly_df = (
-        avg_spend_df[
-            avg_spend_df["category"].isin(["income", "investments", "housing"])
-        ]
+        avg_spend_df[avg_spend_df["category"].isin(distinct_categories)]
         .pivot_table(values="total", columns="category")
         .reset_index(drop=True)
     )
 
     monthly_df["spending"] = avg_spend_df.loc[
-        avg_spend_df["category"].isin(["discretionary", "groceries"]), ["total"]
+        ~avg_spend_df["category"].isin(distinct_categories), ["total"]
     ].sum()[0]
 
     monthly_df["savings"] = (
-        monthly_df["income"]
+        monthly_df["paycheck"]
         + monthly_df["spending"]
         + monthly_df["investments"]
-        + monthly_df["housing"]
+        + monthly_df["rent"]
     )
 
     final_df = pd.concat(
@@ -110,7 +138,7 @@ def accounts_table(
     )
 
     final_df["cash savings"] = (
-        (final_df["housing"] + final_df["spending"] + final_df["investments"])
+        (final_df["rent"] + final_df["spending"] + final_df["investments"])
         * saving_months
         * -1
     )
@@ -121,9 +149,9 @@ def accounts_table(
         "investment",
         "cash savings",
         "excess savings",
-        "income",
+        "paycheck",
         "spending",
-        "housing",
+        "rent",
         "savings",
         "investments",
     ]
@@ -135,7 +163,7 @@ def accounts_table(
         lambda x: [f"${y:,.0f}" for y in x] if x.name == "total" else x
     )
 
-    return final_df.to_dict("records"), [{"name": i, "id": i} for i in final_df.columns]
+    return dbc.Table.from_dataframe(final_df, striped=True, bordered=True, hover=True)
 
 
 def table_base(week_num: int, month: int, year: int, agg_str: str):
@@ -169,14 +197,22 @@ def table_base(week_num: int, month: int, year: int, agg_str: str):
     )
     rating_df["value"] = round(rating_df["value"], 2)
 
-    return pd.concat([agg_week_df, rating_df, sleep_df])[
+    sleep_df["time_delta"] = pd.to_timedelta(sleep_df["value"].astype(str))
+    sleep_df = sleep_df.groupby(["name"], as_index=False).agg({"time_delta": "mean"})
+    sleep_df["value"] = (
+        sleep_df["time_delta"]
+        .dt.total_seconds()
+        .apply(lambda x: time.strftime("%H:%M", time.gmtime(x)))
+    )
+
+    return pd.concat([agg_week_df, rating_df, sleep_df[["name", "value"]]])[
         ["name", "value", "target", "positive"]
     ]
 
 
 @app.callback(
-    Output("scorecard_table", "data"),
-    Output("scorecard_table", "columns"),
+    Output("scorecard_table_positive", "children"),
+    Output("scorecard_table_negative", "children"),
     Input("week_dropdown", "value"),
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
@@ -188,12 +224,31 @@ def scorecard_table(week_num: int, month: int, year: int, agg_str: str):
 
     habit_df = all_data_df[~all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
 
-    return habit_df.to_dict("records"), [{"name": i, "id": i} for i in habit_df.columns]
+    success_df = habit_df[
+        ((habit_df["positive"]) & (habit_df["value"] >= habit_df["target"]))
+        | ((~habit_df["positive"]) & (habit_df["value"] <= habit_df["target"]))
+    ]
+    fail_df = habit_df[
+        ((habit_df["positive"]) & (habit_df["value"] < habit_df["target"]))
+        | ((~habit_df["positive"]) & (habit_df["value"] > habit_df["target"]))
+    ]
+    return dbc.Table.from_dataframe(
+        success_df.drop(columns={"positive"}),
+        striped=True,
+        bordered=True,
+        hover=True,
+        color="success",
+    ), dbc.Table.from_dataframe(
+        fail_df.drop(columns={"positive"}),
+        striped=True,
+        bordered=True,
+        hover=True,
+        color="danger",
+    )
 
 
 @app.callback(
-    Output("supporting_table", "data"),
-    Output("supporting_table", "columns"),
+    Output("supporting_table", "children"),
     Input("week_dropdown", "value"),
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
@@ -208,13 +263,15 @@ def supporting_table(week_num: int, month: int, year: int, agg_str: str):
     support_df = support_df[["name", "value"]]
     support_df["value"] = np.where(
         support_df["name"] != "Duration",
-        support_df["value"].apply(lambda x: x.strftime("%I:%M %p")),
-        support_df["value"].apply(lambda x: x.strftime("%I:%M")),
+        support_df["value"].apply(lambda x: pd.to_datetime(x).strftime("%I:%M %p")),
+        support_df["value"].apply(lambda x: pd.to_datetime(x).strftime("%I:%M")),
     )
 
-    return support_df.to_dict("records"), [
-        {"name": i, "id": i} for i in support_df.columns
-    ]
+    cat_support_data = CategoricalDtype(["Wake", "Bed", "Duration"], ordered=True)
+    support_df["name"] = support_df["name"].astype(cat_support_data)
+    support_df = support_df.sort_values("name")
+
+    return dbc.Table.from_dataframe(support_df, striped=True, bordered=True, hover=True)
 
 
 app.layout = dbc.Container(
@@ -264,8 +321,11 @@ app.layout = dbc.Container(
                         ],
                         style={
                             "width": "100%",
-                            "font-size": 20,
+                            "height": 30,
                             "display": "flex",
+                            "float": "left",
+                            "margin-bottom": 3,
+                            "margin-top": 10,
                         },
                     ),
                     width="auto",
@@ -274,66 +334,26 @@ app.layout = dbc.Container(
             justify="center",
             className="g-0",
         ),
-        # Tables
+        # Scorecard Tables
         dbc.Row(
             [
                 dbc.Col(
-                    html.Div(
-                        [
-                            dash_table.DataTable(
-                                id="scorecard_table",
-                                data=[],
-                                style_header={
-                                    "backgroundColor": "rgb(30, 30, 30)",
-                                    "color": "white",
-                                },
-                                style_data={
-                                    "backgroundColor": "rgb(50, 50, 50)",
-                                    "color": "white",
-                                },
-                                style_data_conditional=[
-                                    {
-                                        "if": {
-                                            "filter_query": "({positive} contains 'true' && {value} >= {target}) || ({positive} contains 'false' && {value} <= {target})"
-                                        },
-                                        "backgroundColor": "#3D9970",
-                                        "color": "white",
-                                    },
-                                    {
-                                        "if": {
-                                            "filter_query": "({positive} contains 'true' && {value} < {target}) || ({positive} contains 'false' && {value} > {target})"
-                                        },
-                                        "backgroundColor": "#FF4136",
-                                        "color": "white",
-                                    },
-                                ],
-                            )
-                        ]
-                    ),
+                    html.Div(id="scorecard_table_positive"),
                 ),
                 dbc.Col(
-                    html.Div(
-                        [
-                            dash_table.DataTable(
-                                id="supporting_table",
-                                data=[],
-                                style_header={
-                                    "backgroundColor": "rgb(30, 30, 30)",
-                                    "color": "white",
-                                },
-                                style_data={
-                                    "backgroundColor": "rgb(50, 50, 50)",
-                                    "color": "white",
-                                },
-                            )
-                        ]
-                    ),
+                    html.Div(id="scorecard_table_negative"),
+                    width={"size": 6},
                 ),
-            ]
+            ],
+            justify="between",
         ),
-        # Finance inputs
+        # Supporting table and finance inputs
         dbc.Row(
             [
+                dbc.Col(
+                    html.Div(id="supporting_table"),
+                    width={"size": 6},
+                ),
                 dbc.Col(
                     html.Div(
                         [
@@ -343,6 +363,7 @@ app.layout = dbc.Container(
                     ),
                     style={"textAlign": "right"},
                     width={"size": 2},
+                    align="center",
                 ),
                 dbc.Col(
                     html.Div(
@@ -355,47 +376,34 @@ app.layout = dbc.Container(
                     ),
                     style={"textAlign": "right"},
                     width={"size": 2},
+                    align="center",
                 ),
             ],
-            justify="end",
+            justify="between",
         ),
-        # Graph + finance table
+        # Graph + accounts table
         dbc.Row(
             [
                 dbc.Col(
                     html.Div([dcc.Graph(id="monthly_finance_barchart")]),
-                    width={"size": 6},
+                    width={"size": 7},
                 ),
                 dbc.Col(
-                    html.Div(
-                        [
-                            dash_table.DataTable(
-                                id="accounts_table",
-                                data=[],
-                                style_header={
-                                    "backgroundColor": "rgb(30, 30, 30)",
-                                    "color": "white",
-                                },
-                                style_data={
-                                    "backgroundColor": "rgb(50, 50, 50)",
-                                    "color": "white",
-                                },
-                            )
-                        ]
-                    ),
+                    html.Div(id="accounts_table"),
                     width={"size": 2},
+                    align="center",
                 ),
             ],
             justify="around",
-            align="center",
         ),
     ],
     fluid=True,
+    className="dbc",
 )
 
 if __name__ == "__main__":
 
-    user_name = sys.argv[1]
+    user_name = "jjm"
     user_config = Data_Getter_Utils.get_user_config(user_name)
 
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
@@ -412,7 +420,7 @@ if __name__ == "__main__":
 
     agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
 
-    budget_df = Finances_Dashboard_Helpers.get_general_budget(user_config)
+    budget_df = Data_Getter_Utils.get_latest_file(file_prefix="monthly_budget")
     finance_df = Data_Getter_Utils.get_latest_file(file_prefix="daily_finances")
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
     account_df = Data_Getter_Utils.get_latest_file(file_prefix="account_totals")
