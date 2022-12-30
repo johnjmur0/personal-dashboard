@@ -104,7 +104,8 @@ class Mint_API_Getter:
         investments = mint_conn.get_investment_data()
 
         ret_cols = [
-            "symbol",
+            # TODO not always there in all datasets, why?
+            # "symbol",
             "description",
             "initialTotalCost",
             "currentValue",
@@ -320,7 +321,7 @@ class Finances_Dashboard_Helpers:
             np.isnan(filter_df["budget"]), 0, filter_df["budget"]
         )
 
-        filter_df[['year', 'month']] = [year, month]
+        filter_df[["year", "month"]] = [year, month]
 
         filter_df = pd.concat(
             [
