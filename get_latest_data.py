@@ -6,11 +6,11 @@ from data_getters.get_marvin_data import Marvin_Processor
 from data_getters.get_mint_data import Mint_API_Getter, Mint_Processor
 from data_getters.utils import Data_Getter_Utils
 
-CALL_MINT = True
+CALL_MINT = False
 
 if __name__ == "__main__":
 
-    user_name = sys.argv[1]
+    user_name = "jjm"  # sys.argv[1]
     user_config = Data_Getter_Utils.get_user_config(user_name)
 
     if CALL_MINT:
@@ -27,13 +27,14 @@ if __name__ == "__main__":
 
     for user, creds in user_config["mint_login"].items():
 
-        Mint_Processor.clean_budgets(user_config, user)
-        Mint_Processor.clean_accounts(user_config, user)
-        Mint_Processor.clean_transactions(user_config, user)
-
         if user == "jjm":
+            Manual_Processor.get_sleep_df_from_xml(user_config)
             Manual_Processor.get_sleep_df(user_config)
 
             Marvin_Processor.get_marvin_habit_data(user_config)
             Marvin_Processor.get_marvin_task_data(user_config)
             Exist_Processor.get_exist_data(user_config)
+
+        Mint_Processor.clean_budgets(user_config, user)
+        Mint_Processor.clean_accounts(user_config, user)
+        Mint_Processor.clean_transactions(user_config, user)

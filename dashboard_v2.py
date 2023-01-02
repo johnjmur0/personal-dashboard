@@ -25,10 +25,6 @@ from data_getters.get_exist_data import Exist_Dashboard_Helpers
 from data_getters.get_marvin_data import Marvin_Dashboard_Helpers
 from data_getters.get_manual_files import Manual_Dashboard_Helpers
 
-# dbc_css = (
-#     "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates@V1.0.4/dbc.min.css"
-# )
-
 template_name = "superhero"
 load_figure_template(template_name)
 server = flask.Flask(__name__)
