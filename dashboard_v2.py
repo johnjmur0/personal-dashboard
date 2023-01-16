@@ -406,15 +406,7 @@ if __name__ == "__main__":
     week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
     sleep_df = Manual_Dashboard_Helpers.format_sleep_df(user_config=user_config)
 
-    agg_df = pd.concat([week_habits_df, day_rating])
-
-    sleep_df = sleep_df.merge(
-        week_habits_df[["year", "month", "week_number"]].drop_duplicates(),
-        on="week_number",
-        how="left",
-    )
-
-    agg_df = pd.concat([agg_df, sleep_df]).sort_values(["year", "month", "week_number"])
+    agg_df = pd.concat([week_habits_df, day_rating, sleep_df]).sort_values(["year", "month", "week_number"])
 
     budget_df = Data_Getter_Utils.get_latest_file(file_prefix="monthly_budget")
     finance_df = Data_Getter_Utils.get_latest_file(file_prefix="daily_finances")

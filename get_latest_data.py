@@ -13,9 +13,12 @@ if __name__ == "__main__":
     user_name = "jjm"  # sys.argv[1]
     user_config = Data_Getter_Utils.get_user_config(user_name)
 
-    if CALL_MINT:
+    for user, creds in user_config["mint_login"].items():
 
-        for user, creds in user_config["mint_login"].items():
+        if user == "dmg":
+            continue
+
+        if CALL_MINT:
 
             mint_conn = Mint_API_Getter.get_mint_conn(creds)
 
@@ -24,8 +27,6 @@ if __name__ == "__main__":
 
             transactions_df = Mint_API_Getter.get_transactions_df(mint_conn, user)
             budgets_df = Mint_API_Getter.get_budgets_df(mint_conn, user)
-
-    for user, creds in user_config["mint_login"].items():
 
         if user == "jjm":
             Manual_Processor.get_sleep_df_from_xml(user_config)
