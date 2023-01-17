@@ -164,6 +164,8 @@ def accounts_table(
 
 def table_base(week_num: int, month: int, year: int, agg_str: str):
 
+    sleep_vals = ["Wake", "Bed", "Duration"]
+
     if agg_str == "week":
         select_df = agg_df[
             (agg_df["year"] == year) & (agg_df["week_number"] == week_num)
@@ -172,36 +174,25 @@ def table_base(week_num: int, month: int, year: int, agg_str: str):
         select_df = agg_df[(agg_df["year"] == year) & (agg_df["month"] == month)]
 
     select_df = select_df[["name", "value", "target", "positive", "week_number"]]
-
-    sleep_cols = ["Wake", "Bed", "Duration"]
-
-    sleep_df = select_df[select_df["name"].isin(sleep_cols)].drop_duplicates()
-    rating_df = select_df[select_df["name"] == "Rating"]
-
     select_df["week_count"] = len(select_df["week_number"].unique())
 
     agg_week_df = (
-        select_df[~select_df["name"].isin(sleep_cols + ["Rating"])]
+        select_df[~select_df["name"].isin(sleep_vals + ["Rating"])]
         .groupby(["name", "positive"], as_index=False)
         .agg({"value": "sum", "target": "mean", "week_count": "max"})
     )
-
     agg_week_df["target"] = agg_week_df["target"] * agg_week_df["week_count"]
 
+    rating_df = select_df[select_df["name"] == "Rating"]
     rating_df = rating_df.groupby(["name", "positive"], as_index=False).agg(
         {"value": "mean", "target": "mean"}
     )
     rating_df["value"] = round(rating_df["value"], 2)
 
-    sleep_df["time_delta"] = pd.to_timedelta(sleep_df["value"].astype(str))
-    sleep_df = sleep_df.groupby(["name"], as_index=False).agg({"time_delta": "mean"})
-    sleep_df["value"] = (
-        sleep_df["time_delta"]
-        .dt.total_seconds()
-        .apply(lambda x: time.strftime("%H:%M", time.gmtime(x)))
-    )
+    sleep_df = select_df[select_df["name"].isin(sleep_vals)]
+    ret_sleep_df = Manual_Dashboard_Helpers.get_avg_sleep_df(sleep_df)
 
-    return pd.concat([agg_week_df, rating_df, sleep_df[["name", "value"]]])[
+    return pd.concat([agg_week_df, rating_df, ret_sleep_df])[
         ["name", "value", "target", "positive"]
     ]
 
@@ -404,9 +395,15 @@ if __name__ == "__main__":
 
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
     week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
-    sleep_df = Manual_Dashboard_Helpers.format_sleep_df(user_config=user_config)
 
-    agg_df = pd.concat([week_habits_df, day_rating, sleep_df]).sort_values(["year", "month", "week_number"])
+    sleep_df = Data_Getter_Utils.get_latest_file(file_prefix="sleep_data")
+    sleep_df = Manual_Dashboard_Helpers.format_sleep_df(
+        sleep_df=sleep_df, user_config=user_config
+    )
+
+    agg_df = pd.concat([week_habits_df, day_rating, sleep_df]).sort_values(
+        ["year", "month", "week_number"]
+    )
 
     budget_df = Data_Getter_Utils.get_latest_file(file_prefix="monthly_budget")
     finance_df = Data_Getter_Utils.get_latest_file(file_prefix="daily_finances")

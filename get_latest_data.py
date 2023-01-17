@@ -30,7 +30,6 @@ if __name__ == "__main__":
 
         if user == "jjm":
             Manual_Processor.get_sleep_df_from_xml(user_config)
-            Manual_Processor.get_sleep_df(user_config)
 
             Marvin_Processor.get_marvin_habit_data(user_config)
             Marvin_Processor.get_marvin_task_data(user_config)
