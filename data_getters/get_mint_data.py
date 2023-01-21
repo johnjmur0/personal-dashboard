@@ -166,7 +166,7 @@ class Mint_Processor:
 
     def clean_budgets(user_config: dict, user_name: str):
 
-        raw_budgets_df = Data_Getter_Utils.get_latest_file(
+        raw_budgets_df = Data_Getter_Utils().get_latest_file(
             f"mint_budgets_raw_{user_name}"
         )
 
@@ -198,7 +198,7 @@ class Mint_Processor:
 
     def clean_transactions(user_config: dict, user_name: str):
 
-        raw_transactions_df = Data_Getter_Utils.get_latest_file(
+        raw_transactions_df = Data_Getter_Utils().get_latest_file(
             f"mint_transactions_raw_{user_name}"
         )
 
@@ -235,7 +235,7 @@ class Mint_Processor:
 
     def clean_accounts(user_config: dict, user_name: str):
 
-        raw_accounts_df = Data_Getter_Utils.get_latest_file(
+        raw_accounts_df = Data_Getter_Utils().get_latest_file(
             f"mint_accounts_raw_{user_name}"
         )
 
@@ -266,19 +266,6 @@ class Mint_Processor:
 
 
 class Finances_Dashboard_Helpers:
-
-    # TODO Ideally I can get budget values from Mint
-    # def get_general_budget(user_config: dict):
-
-    #     budget_df = (
-    #         pd.DataFrame(
-    #             data=user_config["finances_config"]["general_budget"], index=[0]
-    #         )
-    #         .T.reset_index(drop=False)
-    #         .rename(columns={"index": "category", 0: "budget"})
-    #     )
-
-    #     return budget_df
 
     def get_month_sum_df(
         finance_df: pd.DataFrame, remove_category_list=["bonus", "investment"]

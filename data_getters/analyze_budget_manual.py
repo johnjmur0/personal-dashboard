@@ -9,7 +9,7 @@ class Budget_Analysis_Helpers:
         base_df: pd.DataFrame, file_prefix: str, user_id: str
     ) -> pd.DataFrame:
 
-        user_df = Data_Getter_Utils.get_latest_file(
+        user_df = Data_Getter_Utils().get_latest_file(
             file_prefix=f"{file_prefix}_{user_id}"
         )
         user_df["user"] = user_id

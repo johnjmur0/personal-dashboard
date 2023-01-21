@@ -134,9 +134,7 @@ class Exist_Processor:
             Exist_Processor.get_date_range(), login_dict
         )
 
-        date_str = exist_df["date"].max()
-        exist_df.to_csv(f"./temp_cache/exist_data_{date_str}.csv", index=False)
-
+        Data_Getter_Utils.write_temp_cache(exist_df, "exist_data")
 
 class Exist_Dashboard_Helpers:
     def format_exist_df(exist_df: pd.DataFrame, user_config: dict) -> pd.DataFrame:

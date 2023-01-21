@@ -1,17 +1,19 @@
-import sys
-
+import os
 from data_getters.get_exist_data import Exist_Processor
 from data_getters.get_manual_files import Manual_Processor
 from data_getters.get_marvin_data import Marvin_Processor
 from data_getters.get_mint_data import Mint_API_Getter, Mint_Processor
 from data_getters.utils import Data_Getter_Utils
 
-CALL_MINT = False
+CALL_MINT = True
 
 if __name__ == "__main__":
 
     user_name = "jjm"  # sys.argv[1]
-    user_config = Data_Getter_Utils.get_user_config(user_name)
+    data_getter = Data_Getter_Utils()
+    user_config = data_getter.get_user_config(user_name)
+
+    existing_cache = data_getter.get_existing_cache()
 
     for user, creds in user_config["mint_login"].items():
 
@@ -38,3 +40,8 @@ if __name__ == "__main__":
         Mint_Processor.clean_budgets(user_config, user)
         Mint_Processor.clean_accounts(user_config, user)
         Mint_Processor.clean_transactions(user_config, user)
+
+    new_cache = data_getter.get_existing_cache()
+
+    if len(new_cache) == existing_cache * 2:
+        [os.remove(x) for x in existing_cache]

@@ -40,34 +40,34 @@ class Manual_Processor:
 
         sleep_df = sleep_df[["sleep_start", "sleep_end"]]
 
-        sleep_df["start_date"] = sleep_df["sleep_start"].dt.date
+        # Older - start day, hour, min are identical, take max end
+        # newer - end day is same, assign value. group by value, take max end, min start
         sleep_df["end_date"] = sleep_df["sleep_end"].dt.date
+        sleep_df['wake_obs'] = sleep_df.groupby(['end_date']).ngroup()
 
-        sleep_df["min_sleep_start"] = (
-            sleep_df["sleep_start"].groupby(sleep_df["start_date"]).transform("min")
-        )
-        sleep_df["max_sleep_end"] = (
-            sleep_df["sleep_end"].groupby(sleep_df["end_date"]).transform("max")
-        )
-        sleep_df = sleep_df[["min_sleep_start", "max_sleep_end"]].drop_duplicates()
+        #filtered_sleep_df = sleep_df[~sleep_df['sleep_end'].dt.hour.isin([0, 22, 23])]
 
-        sleep_df["year"] = sleep_df["min_sleep_start"].dt.year
-        sleep_df["month"] = sleep_df["min_sleep_start"].dt.month
-        sleep_df["day"] = sleep_df["min_sleep_start"].dt.day
-        sleep_df["week"] = sleep_df["min_sleep_start"].dt.isocalendar().week
+        sleep_df['min_sleep_start'] = sleep_df['sleep_start'].groupby(sleep_df['wake_obs']).transform("min")
+        sleep_df['max_sleep_end'] = sleep_df['sleep_end'].groupby(sleep_df['wake_obs']).transform("max")
 
         sleep_df["duration"] = sleep_df["max_sleep_end"] - sleep_df["min_sleep_start"]
 
-        sleep_df["bedtime"] = sleep_df["min_sleep_start"]
-        sleep_df["wakeup"] = sleep_df["max_sleep_end"]
+        sleep_df = sleep_df[~sleep_df['max_sleep_end'].dt.hour.isin([0, 22, 23, 1, 2, 3])]
+
+        sleep_df = sleep_df[["min_sleep_start", "max_sleep_end", "duration"]].drop_duplicates()
+
+        sleep_df.rename(columns = {"min_sleep_start": "bedtime", "max_sleep_end": "wakeup"}, inplace = True)
+
+        sleep_df["year"] = sleep_df["wakeup"].dt.year
+        sleep_df["month"] = sleep_df["wakeup"].dt.month
+        sleep_df["day"] = sleep_df["wakeup"].dt.day
+        sleep_df["week"] = sleep_df["wakeup"].dt.isocalendar().week
 
         ret_df = sleep_df[["year", "month", "week", "bedtime", "wakeup", "duration"]]
 
         ret_df.reset_index(drop=False, inplace=True)
 
         Data_Getter_Utils.write_temp_cache(ret_df, "sleep_data")
-
-        return ret_df
 
 
 class Manual_Dashboard_Helpers:

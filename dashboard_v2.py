@@ -391,12 +391,13 @@ app.layout = dbc.Container(
 if __name__ == "__main__":
 
     user_name = "jjm"
-    user_config = Data_Getter_Utils.get_user_config(user_name)
+    data_getter = Data_Getter_Utils()
+    user_config = data_getter.get_user_config(user_name)
 
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
     week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
 
-    sleep_df = Data_Getter_Utils.get_latest_file(file_prefix="sleep_data")
+    sleep_df = data_getter.get_latest_file(file_prefix="sleep_data")
     sleep_df = Manual_Dashboard_Helpers.format_sleep_df(
         sleep_df=sleep_df, user_config=user_config
     )
@@ -405,9 +406,10 @@ if __name__ == "__main__":
         ["year", "month", "week_number"]
     )
 
-    budget_df = Data_Getter_Utils.get_latest_file(file_prefix="monthly_budget")
-    finance_df = Data_Getter_Utils.get_latest_file(file_prefix="daily_finances")
+    budget_df = data_getter.get_latest_file(file_prefix="monthly_budget")
+    finance_df = data_getter.get_latest_file(file_prefix="daily_finances")
+    account_df = data_getter.get_latest_file(file_prefix="account_totals")
+
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
-    account_df = Data_Getter_Utils.get_latest_file(file_prefix="account_totals")
 
     app.run_server(debug=True)
