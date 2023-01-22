@@ -266,7 +266,6 @@ class Mint_Processor:
 
 
 class Finances_Dashboard_Helpers:
-
     def get_month_sum_df(
         finance_df: pd.DataFrame, remove_category_list=["bonus", "investment"]
     ):
@@ -310,23 +309,8 @@ class Finances_Dashboard_Helpers:
 
         filter_df[["year", "month"]] = [year, month]
 
-        filter_df = pd.concat(
-            [
-                filter_df,
-                pd.DataFrame(
-                    data={
-                        "year": [year],
-                        "month": [month],
-                        "category": "profit/loss",
-                        "budget": [profit_target],
-                        "total": [filter_df["total"].sum()],
-                    }
-                ),
-            ]
-        )
-
         filter_df = filter_df[
-            (abs(filter_df["total"]) > 100) & (filter_df["category"] != "paycheck")
+            (abs(filter_df["total"]) > 100) & ~(filter_df["category"].isin(["paycheck", "investments"]))
         ]
 
         return pd.melt(

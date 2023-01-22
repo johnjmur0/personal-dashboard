@@ -203,7 +203,7 @@ class Marvin_Dashboard_Helpers:
     ) -> pd.DataFrame:
 
         if habit_df is None:
-            habit_df = Data_Getter_Utils.get_latest_file(file_prefix="marvin_habits")
+            habit_df = Data_Getter_Utils().get_latest_file(file_prefix="marvin_habits")
 
         habit_df["year"] = pd.to_datetime(habit_df["timestamp"]).dt.year
         habit_df["month"] = pd.to_datetime(habit_df["timestamp"]).dt.month

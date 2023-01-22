@@ -88,10 +88,14 @@ def monthly_finance_barchart(month: int, year: int):
     Output("accounts_table", "children"),
     Input("profit_target", "value"),
     Input("saving_months", "value"),
+    Input("month_dropdown", "value"),
+    Input("year_dropdown", "value"),
 )
 def accounts_table(
     profit_target: int,
     saving_months: int,
+    month: int,
+    year: int,
     historical_start_year: int = 2022,
 ):
 
@@ -99,33 +103,23 @@ def accounts_table(
         account_df[["account_type", "total"]], values="total", columns=["account_type"]
     )
 
-    avg_spend_df = (
-        finance_df[finance_df["year"] >= historical_start_year]
-        .groupby(["year", "month", "category"])
-        .agg({"total": "sum"})
-        .groupby(["category"])
-        .agg({"total": "mean"})
-        .reset_index(drop=False)
-    )
+    month_df = finance_df[(finance_df["year"] == year) & (finance_df["month"] == month)]
 
-    avg_spend_df = avg_spend_df[~avg_spend_df["category"].isin(["loans", "bonus"])]
+    distinct_categories = ["paycheck", "investments"]
 
-    distinct_categories = ["paycheck", "investments", "rent"]
-    monthly_df = (
-        avg_spend_df[avg_spend_df["category"].isin(distinct_categories)]
-        .pivot_table(values="total", columns="category")
-        .reset_index(drop=True)
-    )
+    month_spend = month_df[~month_df["category"].isin(distinct_categories)][
+        "total"
+    ].sum()
+    month_income = month_df[month_df["category"] == "paycheck"]["total"].sum()
+    month_profit = month_income + month_spend
 
-    monthly_df["spending"] = avg_spend_df.loc[
-        ~avg_spend_df["category"].isin(distinct_categories), ["total"]
-    ].sum()[0]
-
-    monthly_df["savings"] = (
-        monthly_df["paycheck"]
-        + monthly_df["spending"]
-        + monthly_df["investments"]
-        + monthly_df["rent"]
+    monthly_df = pd.DataFrame(
+        data={
+            "spending": month_spend,
+            "paycheck": month_income,
+            "savings": month_profit,
+        },
+        index=[0],
     )
 
     final_df = pd.concat(
@@ -133,30 +127,20 @@ def accounts_table(
         axis=1,
     )
 
-    final_df["cash savings"] = (
-        (final_df["rent"] + final_df["spending"] + final_df["investments"])
-        * saving_months
-        * -1
-    )
-    final_df["excess savings"] = final_df["bank"] - final_df["cash savings"]
-
     final_cols = [
         "bank",
         "investment",
-        "cash savings",
-        "excess savings",
         "paycheck",
         "spending",
-        "rent",
         "savings",
-        "investments",
     ]
     final_df = pd.melt(final_df, id_vars=[], value_vars=final_cols)
 
-    final_df["total"] = round(final_df["value"], -1)
+    col_name = f"total"
+    final_df[col_name] = round(final_df["value"], -1)
     final_df.drop(columns=["value"], inplace=True)
     final_df = final_df.apply(
-        lambda x: [f"${y:,.0f}" for y in x] if x.name == "total" else x
+        lambda x: [f"${y:,.0f}" for y in x] if x.name == col_name else x
     )
 
     return dbc.Table.from_dataframe(final_df, striped=True, bordered=True, hover=True)
@@ -377,7 +361,7 @@ app.layout = dbc.Container(
                 ),
                 dbc.Col(
                     html.Div(id="accounts_table"),
-                    width={"size": 2},
+                    width={"size": 3},
                     align="center",
                 ),
             ],
@@ -394,8 +378,15 @@ if __name__ == "__main__":
     data_getter = Data_Getter_Utils()
     user_config = data_getter.get_user_config(user_name)
 
-    day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(user_config=user_config)
-    week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(user_config=user_config)
+    exist_data = data_getter.get_latest_file(file_prefix="exist_data")
+    day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(
+        exist_data, user_config=user_config
+    )
+
+    marvin_data = data_getter.get_latest_file(file_prefix="marvin_habits")
+    week_habits_df = Marvin_Dashboard_Helpers.format_habit_df(
+        marvin_data, user_config=user_config
+    )
 
     sleep_df = data_getter.get_latest_file(file_prefix="sleep_data")
     sleep_df = Manual_Dashboard_Helpers.format_sleep_df(

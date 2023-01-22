@@ -188,12 +188,13 @@ class Exist_Dashboard_Helpers:
         return habit_df
 
     def get_weekly_rating_df(
-        formatted_exist_df: pd.DataFrame = None, user_config: dict = None
+        exist_df: pd.DataFrame = None, user_config: dict = None
     ) -> pd.DataFrame:
 
-        if formatted_exist_df is None:
-            exist_df = Data_Getter_Utils.get_latest_file(file_prefix="exist_data")
-            formatted_exist_df = Exist_Dashboard_Helpers.format_exist_df(
+        if exist_df is None:
+            exist_df = Data_Getter_Utils().get_latest_file(file_prefix="exist_data")
+
+        formatted_exist_df = Exist_Dashboard_Helpers.format_exist_df(
                 exist_df, user_config
             )
 

@@ -43,5 +43,5 @@ if __name__ == "__main__":
 
     new_cache = data_getter.get_existing_cache()
 
-    if len(new_cache) == existing_cache * 2:
+    if len(new_cache) == len(existing_cache) * 2:
         [os.remove(x) for x in existing_cache]
