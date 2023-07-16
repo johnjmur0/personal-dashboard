@@ -61,7 +61,7 @@ class Budget_Analysis_Helpers:
 
 if __name__ == "__main__":
 
-    users = ["jjm", "dmg"]
+    users = ["dmg", "jjm"]
 
     account_df = pd.DataFrame()
     finance_df = pd.DataFrame()

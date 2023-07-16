@@ -10,13 +10,14 @@ from webdriver_manager.firefox import GeckoDriverManager
 from seleniumrequests import Firefox
 
 from data_getters.utils import Data_Getter_Utils
+from dash_files.dashboard_utils import (
+    aggregate_monthly_df,
+)
 
 
 class Mint_API_Getter:
-
     # https://github.com/mintapi/mintapi
     def get_mint_conn(login_config: dict):
-
         driver = Firefox(executable_path=GeckoDriverManager().install())
 
         return mintapi.Mint(
@@ -31,7 +32,6 @@ class Mint_API_Getter:
         )
 
     def process_mint_df(mint_json_return: json, ret_cols: List[str]) -> pd.DataFrame:
-
         ret_df = pd.DataFrame()
 
         for entry in mint_json_return:
@@ -44,7 +44,6 @@ class Mint_API_Getter:
         return ret_df
 
     def expand_category_col(df, ret_cols, keep_names):
-
         df = pd.concat(
             [
                 df.drop(columns={"category"}),
@@ -62,7 +61,6 @@ class Mint_API_Getter:
         mint_conn.close()
 
     def get_accounts_df(mint_conn, user_name: str):
-
         accounts = mint_conn.get_account_data()
 
         ret_cols = [
@@ -82,7 +80,6 @@ class Mint_API_Getter:
         return accounts_df
 
     def get_transactions_df(mint_conn, user_name: str):
-
         transactions = mint_conn.get_transaction_data(limit=1000000)
 
         ret_cols = ["date", "description", "amount", "type", "category", "accountId"]
@@ -100,7 +97,6 @@ class Mint_API_Getter:
         return transactions_df
 
     def get_investments_df(mint_conn, user_name: str):
-
         investments = mint_conn.get_investment_data()
 
         ret_cols = [
@@ -122,7 +118,6 @@ class Mint_API_Getter:
         return investments_df
 
     def get_budgets_df(mint_conn, user_name: str):
-
         budgets = mint_conn.get_budget_data()
 
         ret_cols = ["budgetDate", "category", "amount", "budgetAmount"]
@@ -137,7 +132,6 @@ class Mint_API_Getter:
 
 class Mint_Processor:
     def category_dict_to_df(category_dict: dict):
-
         category_df = pd.melt(
             pd.DataFrame(dict([(k, pd.Series(v)) for k, v in category_dict.items()]))
         )
@@ -152,7 +146,6 @@ class Mint_Processor:
         return category_df
 
     def get_category_df(user_config: dict):
-
         agg_categories_df = Mint_Processor.category_dict_to_df(
             user_config["aggregate_categories"]
         )
@@ -165,9 +158,10 @@ class Mint_Processor:
         ).merge(agg_categories_df, on="category")
 
     def clean_budgets(user_config: dict, user_name: str):
-
-        raw_budgets_df = Data_Getter_Utils().get_latest_file(
-            f"mint_budgets_raw_{user_name}"
+        raw_budgets_df = (
+            Data_Getter_Utils()
+            .get_latest_file(f"mint_budgets_raw_{user_name}")
+            .drop_duplicates()
         )
 
         raw_budgets_df["budgetDate"] = pd.to_datetime(raw_budgets_df["budgetDate"])
@@ -197,7 +191,6 @@ class Mint_Processor:
         return agg_budgets_df
 
     def clean_transactions(user_config: dict, user_name: str):
-
         raw_transactions_df = Data_Getter_Utils().get_latest_file(
             f"mint_transactions_raw_{user_name}"
         )
@@ -234,7 +227,6 @@ class Mint_Processor:
         return agg_transactions_df
 
     def clean_accounts(user_config: dict, user_name: str):
-
         raw_accounts_df = Data_Getter_Utils().get_latest_file(
             f"mint_accounts_raw_{user_name}"
         )
@@ -269,7 +261,6 @@ class Finances_Dashboard_Helpers:
     def get_month_sum_df(
         finance_df: pd.DataFrame, remove_category_list=["bonus", "investment"]
     ):
-
         regular_finances = finance_df[
             ~finance_df["category"].isin(remove_category_list)
         ]
@@ -291,36 +282,37 @@ class Finances_Dashboard_Helpers:
         budget_df: pd.DataFrame,
         year: int,
         month: int,
+        agg_str: str,
         housing_payment: int = 0,
         profit_target: int = 3000,
     ):
+        if agg_str == "week":
+            agg_str = "month"
 
-        filter_df = (
-            finance_df[(finance_df["year"] == year) & (finance_df["month"] == month)]
-            .groupby("category")
-            .agg({"total": "sum"})
-            .reset_index(drop=False)
-        )
+        monthly_df = finance_df.groupby(
+            ["year", "month", "category"], as_index=False
+        ).agg({"total": "sum"})
+        monthly_df = monthly_df.merge(budget_df, how="left", on="category")
+        filter_df = aggregate_monthly_df(monthly_df, month, year, 0, agg_str)
 
-        filter_df = filter_df.merge(budget_df, how="left", on="category")
         filter_df["budget"] = np.where(
             np.isnan(filter_df["budget"]), 0, filter_df["budget"]
         )
 
-        filter_df[["year", "month"]] = [year, month]
-
-        filter_df = filter_df[
-            (abs(filter_df["total"]) > 100) & ~(filter_df["category"].isin(["paycheck", "investments"]))
-        ]
-
-        return pd.melt(
-            filter_df,
-            id_vars=["category", "year", "month"],
-            value_vars=["total", "budget"],
+        filter_df = (
+            filter_df.groupby("category")
+            .agg({"total": "sum", "budget": "sum"})
+            .reset_index(drop=False)
         )
 
-    def get_monthly_income(finance_df: pd.DataFrame, month: int, year: int):
+        filter_df = filter_df[
+            (abs(filter_df["total"]) > 100)
+            & ~(filter_df["category"].isin(["paycheck", "investments", "bonus"]))
+        ]
 
+        return filter_df
+
+    def get_monthly_income(finance_df: pd.DataFrame, month: int, year: int):
         return finance_df[
             (finance_df["month"] == month)
             & (finance_df["year"] == year)
@@ -334,7 +326,6 @@ class Finances_Dashboard_Helpers:
         year: int,
         historical_start_year: int,
     ):
-
         monthly_income = Finances_Dashboard_Helpers.get_monthly_income(
             finance_df, month, year
         )

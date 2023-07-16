@@ -5,23 +5,20 @@ from data_getters.get_marvin_data import Marvin_Processor
 from data_getters.get_mint_data import Mint_API_Getter, Mint_Processor
 from data_getters.utils import Data_Getter_Utils
 
-CALL_MINT = True
+CALL_MINT = False
 
 if __name__ == "__main__":
-
-    user_name = "jjm"  # sys.argv[1]
+    user_name = "jjm"
     data_getter = Data_Getter_Utils()
     user_config = data_getter.get_user_config(user_name)
 
     existing_cache = data_getter.get_existing_cache()
 
     for user, creds in user_config["mint_login"].items():
-
         if user == "dmg":
             continue
 
         if CALL_MINT:
-
             mint_conn = Mint_API_Getter.get_mint_conn(creds)
 
             investments_df = Mint_API_Getter.get_investments_df(mint_conn, user)

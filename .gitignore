@@ -1,4 +1,5 @@
 chromedriver.exe
+LICENSE.chromedriver
 .vscode/*
 
 # Byte-compiled / optimized / DLL files

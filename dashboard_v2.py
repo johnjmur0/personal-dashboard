@@ -18,6 +18,7 @@ from dash_files.dashboard_utils import (
     month_dropdown,
     week_dropdown,
     aggregation_radio,
+    aggregate_monthly_df,
 )
 from data_getters.utils import Data_Getter_Utils
 from data_getters.get_mint_data import Finances_Dashboard_Helpers
@@ -35,31 +36,30 @@ app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
     Output("monthly_finance_barchart", "figure"),
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
+    Input("aggregation_radio", "value"),
 )
-def monthly_finance_barchart(month: int, year: int):
-
+def monthly_finance_barchart(month: int, year: int, agg_str: str):
     filter_df = Finances_Dashboard_Helpers.create_spend_budget_df(
-        finance_df, budget_df, year, month
+        finance_df, budget_df, year, month, agg_str
     )
 
-    pivot_df = filter_df.pivot_table(
-        values="value", index=["category"], columns=["variable"]
-    )
-    pivot_df["diff"] = (pivot_df["total"] - pivot_df["budget"]) * -1
-    pivot_df["diff"] = np.where(abs(pivot_df["diff"]) == np.Inf, 0, pivot_df["diff"])
-    pivot_df.reset_index(drop=False, inplace=True)
+    filter_df["diff"] = (filter_df["total"] - filter_df["budget"]) * -1
+    filter_df["diff"] = np.where(abs(filter_df["diff"]) == np.Inf, 0, filter_df["diff"])
 
-    pivot_df["positive"] = np.where(pivot_df["diff"] < 0, "Under-Budget", "Over-Budget")
+    filter_df["positive"] = np.where(
+        filter_df["diff"] < 0, "Under-Budget", "Over-Budget"
+    )
+    color_map = {"Under-Budget": "#5cb85c", "Over-Budget": "#d9534f"}
 
     fig = px.bar(
-        pivot_df,
+        filter_df,
         x="diff",
         y="category",
         color="positive",
         barmode="group",
         text_auto=".2s",
         template=template_name,
-        color_discrete_sequence=["#d9534f", "#5cb85c"],
+        color_discrete_map=color_map,
     )
 
     fig.add_vline(x=0, line_dash="dash", line_color="red")
@@ -73,7 +73,7 @@ def monthly_finance_barchart(month: int, year: int):
         xaxis_title=None,
         yaxis=dict(tickfont=dict(size=16)),
         title={
-            "text": "Monthly Budget Evaluation",
+            "text": "Budget Evaluation",
             "xanchor": "center",
             "yanchor": "top",
             "y": 0.95,
@@ -90,40 +90,42 @@ def monthly_finance_barchart(month: int, year: int):
     Input("saving_months", "value"),
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
+    Input("aggregation_radio", "value"),
 )
 def accounts_table(
     profit_target: int,
     saving_months: int,
     month: int,
     year: int,
+    agg_str: str,
     historical_start_year: int = 2022,
 ):
-
     pivot_account_df = pd.pivot_table(
         account_df[["account_type", "total"]], values="total", columns=["account_type"]
     )
 
-    month_df = finance_df[(finance_df["year"] == year) & (finance_df["month"] == month)]
+    if agg_str == "week":
+        agg_str = "month"
 
-    distinct_categories = ["paycheck", "investments"]
+    select_df = aggregate_monthly_df(finance_df, month, year, 0, agg_str)
 
-    month_spend = month_df[~month_df["category"].isin(distinct_categories)][
-        "total"
-    ].sum()
-    month_income = month_df[month_df["category"] == "paycheck"]["total"].sum()
-    month_profit = month_income + month_spend
+    distinct_categories = ["paycheck", "investments", "bonus"]
 
-    monthly_df = pd.DataFrame(
+    spend = select_df[~select_df["category"].isin(distinct_categories)]["total"].sum()
+    income = select_df[select_df["category"].isin(["paycheck", "bonus"])]["total"].sum()
+    profit = income + spend
+
+    ret_df = pd.DataFrame(
         data={
-            "spending": month_spend,
-            "paycheck": month_income,
-            "savings": month_profit,
+            "spending": spend,
+            "paycheck": income,
+            "savings": profit,
         },
         index=[0],
     )
 
     final_df = pd.concat(
-        [pivot_account_df.reset_index(drop=True), monthly_df.reset_index(drop=True)],
+        [pivot_account_df.reset_index(drop=True), ret_df.reset_index(drop=True)],
         axis=1,
     )
 
@@ -147,15 +149,9 @@ def accounts_table(
 
 
 def table_base(week_num: int, month: int, year: int, agg_str: str):
-
     sleep_vals = ["Wake", "Bed", "Duration"]
 
-    if agg_str == "week":
-        select_df = agg_df[
-            (agg_df["year"] == year) & (agg_df["week_number"] == week_num)
-        ]
-    elif agg_str == "month":
-        select_df = agg_df[(agg_df["year"] == year) & (agg_df["month"] == month)]
+    select_df = aggregate_monthly_df(agg_df, month, year, week_num, agg_str)
 
     select_df = select_df[["name", "value", "target", "positive", "week_number"]]
     select_df["week_count"] = len(select_df["week_number"].unique())
@@ -190,7 +186,6 @@ def table_base(week_num: int, month: int, year: int, agg_str: str):
     Input("aggregation_radio", "value"),
 )
 def scorecard_table(week_num: int, month: int, year: int, agg_str: str):
-
     all_data_df = table_base(week_num, month, year, agg_str)
 
     habit_df = all_data_df[~all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
@@ -226,7 +221,6 @@ def scorecard_table(week_num: int, month: int, year: int, agg_str: str):
     Input("aggregation_radio", "value"),
 )
 def supporting_table(week_num: int, month: int, year: int, agg_str: str):
-
     all_data_df = table_base(week_num, month, year, agg_str)
 
     support_df = all_data_df[all_data_df["name"].isin(["Wake", "Bed", "Duration"])]
@@ -373,7 +367,6 @@ app.layout = dbc.Container(
 )
 
 if __name__ == "__main__":
-
     user_name = "jjm"
     data_getter = Data_Getter_Utils()
     user_config = data_getter.get_user_config(user_name)
