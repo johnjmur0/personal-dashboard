@@ -12,6 +12,7 @@ Sources include:
     - I really love Marvin. Couldn't recommend it enough.
   - More tracking with Exist: https://exist.io/
     - As I continue using Marvin, I may end up dropping Exist and using Marvin instead.
+  - Also I started getting the sleep data from Apple iPhone. It involves one manual step to export from the phone, since they don't have an API
 
 Next steps are to integrate more analysis and stats around budgets and add some financial projections.
 
