@@ -18,9 +18,10 @@ Next steps are to integrate more analysis and stats around budgets and add some 
 NOTE: Since its totally custom to me and connected to these data sources (some of which are subscriptions), please don't try to fork it without letting me know.
 If you're interested, I'd be happy to help you get something working on your end, but have no interest in maintaining this for anyone other than myself.
 
-But if you're a Mint, Marvin, Exist user, feel to reach out or checkout how I've processed those. Each were unique in their own way.
+But if you're a Mint, Marvin, Exist user, feel to reach out or checkout how I've processed those. Each were different.
 
 P.S. I wiped the commit history b/c when I was prototying I had some config info hardcoded.
 
 Here's an example of how it looks now (with some actual data 0'd out):
+
 ![image](image.png)
