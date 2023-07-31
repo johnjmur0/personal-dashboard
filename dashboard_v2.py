@@ -114,10 +114,13 @@ def accounts_table(
     spend = select_df[~select_df["category"].isin(distinct_categories)]["total"].sum()
     income = select_df[select_df["category"].isin(["paycheck", "bonus"])]["total"].sum()
     profit = income + spend
+    budget = budget_df["budget"].sum()
 
     ret_df = pd.DataFrame(
         data={
+            "budget": budget,
             "spending": spend,
+            "delta": budget - abs(spend),
             "paycheck": income,
             "savings": profit,
         },
@@ -134,6 +137,8 @@ def accounts_table(
         "investment",
         "paycheck",
         "spending",
+        "budget",
+        "delta",
         "savings",
     ]
     final_df = pd.melt(final_df, id_vars=[], value_vars=final_cols)

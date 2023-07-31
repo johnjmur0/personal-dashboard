@@ -9,17 +9,16 @@ import numpy as np
 import datetime
 from data_getters.utils import Data_Getter_Utils
 
-# Temp holdover for sleep data until I get a replacement for exist
-class Manual_Processor:
-    def get_sleep_df(user_config: dict) -> pd.DataFrame:
 
+class Manual_Processor:
+    # Temp holdover for sleep data until I get a replacement for exist
+    def get_sleep_df(user_config: dict) -> pd.DataFrame:
         file_path = user_config["manual_files"]["sleep_xlsx_path"]
         week_df = pd.read_excel(open(file_path, "rb"), sheet_name="weekly_average")
 
         return week_df
 
     def get_sleep_df_from_xml(user_config: dict) -> pd.DataFrame:
-
         file_path = os.path.join(
             user_config["manual_files"]["sleep_xml_path"],
             "export/apple_health_export\export.xml",
@@ -43,20 +42,29 @@ class Manual_Processor:
         # Older - start day, hour, min are identical, take max end
         # newer - end day is same, assign value. group by value, take max end, min start
         sleep_df["end_date"] = sleep_df["sleep_end"].dt.date
-        sleep_df['wake_obs'] = sleep_df.groupby(['end_date']).ngroup()
+        sleep_df["wake_obs"] = sleep_df.groupby(["end_date"]).ngroup()
 
-        #filtered_sleep_df = sleep_df[~sleep_df['sleep_end'].dt.hour.isin([0, 22, 23])]
-
-        sleep_df['min_sleep_start'] = sleep_df['sleep_start'].groupby(sleep_df['wake_obs']).transform("min")
-        sleep_df['max_sleep_end'] = sleep_df['sleep_end'].groupby(sleep_df['wake_obs']).transform("max")
+        sleep_df["min_sleep_start"] = (
+            sleep_df["sleep_start"].groupby(sleep_df["wake_obs"]).transform("min")
+        )
+        sleep_df["max_sleep_end"] = (
+            sleep_df["sleep_end"].groupby(sleep_df["wake_obs"]).transform("max")
+        )
 
         sleep_df["duration"] = sleep_df["max_sleep_end"] - sleep_df["min_sleep_start"]
 
-        sleep_df = sleep_df[~sleep_df['max_sleep_end'].dt.hour.isin([0, 22, 23, 1, 2, 3])]
+        sleep_df = sleep_df[
+            ~sleep_df["max_sleep_end"].dt.hour.isin([0, 22, 23, 1, 2, 3])
+        ]
 
-        sleep_df = sleep_df[["min_sleep_start", "max_sleep_end", "duration"]].drop_duplicates()
+        sleep_df = sleep_df[
+            ["min_sleep_start", "max_sleep_end", "duration"]
+        ].drop_duplicates()
 
-        sleep_df.rename(columns = {"min_sleep_start": "bedtime", "max_sleep_end": "wakeup"}, inplace = True)
+        sleep_df.rename(
+            columns={"min_sleep_start": "bedtime", "max_sleep_end": "wakeup"},
+            inplace=True,
+        )
 
         sleep_df["year"] = sleep_df["wakeup"].dt.year
         sleep_df["month"] = sleep_df["wakeup"].dt.month
@@ -103,7 +111,6 @@ class Manual_Dashboard_Helpers:
         return Manual_Dashboard_Helpers.radians_to_time_of_day(avg_angle)
 
     def get_avg_sleep_df(sleep_df):
-
         ret_sleep_df = sleep_df[["name", "target", "positive"]].drop_duplicates()
         avg_sleep_vals = (
             sleep_df[sleep_df["name"] != "Duration"][["name", "value"]]
@@ -136,9 +143,7 @@ class Manual_Dashboard_Helpers:
     def format_sleep_df(
         sleep_df: pd.DataFrame = None, user_config: dict = None
     ) -> pd.DataFrame:
-
         if sleep_df is None:
-
             sleep_df = Manual_Processor.get_sleep_df_from_xml(user_config)
 
         sleep_df = sleep_df.rename(
