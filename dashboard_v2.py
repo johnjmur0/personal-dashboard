@@ -17,8 +17,11 @@ from dash_files.dashboard_utils import (
     year_dropdown,
     month_dropdown,
     week_dropdown,
+    variable_dropdown,
+    get_agg_vec,
     aggregation_radio,
-    aggregate_monthly_df,
+    filter_monthly_df,
+    add_quarter_col,
 )
 from data_getters.utils import Data_Getter_Utils
 from data_getters.get_mint_data import Finances_Dashboard_Helpers
@@ -30,6 +33,7 @@ template_name = "superhero"
 load_figure_template(template_name)
 server = flask.Flask(__name__)
 app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
+var_list = []
 
 
 @app.callback(
@@ -107,22 +111,47 @@ def accounts_table(
     if agg_str == "week":
         agg_str = "month"
 
-    select_df = aggregate_monthly_df(finance_df, month, year, 0, agg_str)
+    monthly_budget_df = finance_df.groupby(
+        ["year", "quarter", "month"], as_index=False
+    ).agg({"total": "sum"})
+    monthly_budget_df["budget"] = budget_df["budget"].sum()
 
-    distinct_categories = ["paycheck", "investments", "bonus"]
+    agg_vec = get_agg_vec(agg_str)
 
-    spend = select_df[~select_df["category"].isin(distinct_categories)]["total"].sum()
-    income = select_df[select_df["category"].isin(["paycheck", "bonus"])]["total"].sum()
-    profit = income + spend
-    budget = budget_df["budget"].sum()
+    income_categories = ["paycheck", "bonus"]
+    non_spend_categories = income_categories + ["investments"]
+
+    finance_agg_df = (
+        (
+            monthly_budget_df[~monthly_budget_df["category"].isin(non_spend_categories)]
+            .groupby(agg_vec)
+            .agg({"total": "sum", "budget": "sum"})
+            .rename(columns={"total": "spend"})
+        )
+        .join(
+            monthly_budget_df[monthly_budget_df["category"].isin(income_categories)]
+            .groupby(agg_vec)
+            .agg({"total": "sum"})
+            .rename(columns={"total": "income"})
+        )
+        .reset_index(drop=False)
+        .fillna(0)
+    )
+
+    finance_agg_df["profit"] = finance_agg_df["income"] + finance_agg_df["spend"]
+
+    filter_df = filter_monthly_df(finance_agg_df, month, year, 0, agg_str)
+
+    budget = budget_df["budget"].sum() * len(filter_df["month"].unique())
+    spend = filter_df["spend"].sum()
 
     ret_df = pd.DataFrame(
         data={
             "budget": budget,
             "spending": spend,
-            "delta": budget - abs(spend),
-            "paycheck": income,
-            "savings": profit,
+            "over/under spend": budget - abs(spend),
+            "paycheck": filter_df["income"].sum(),
+            "savings": filter_df["profit"].sum(),
         },
         index=[0],
     )
@@ -138,7 +167,7 @@ def accounts_table(
         "paycheck",
         "spending",
         "budget",
-        "delta",
+        "over/under spend",
         "savings",
     ]
     final_df = pd.melt(final_df, id_vars=[], value_vars=final_cols)
@@ -156,7 +185,7 @@ def accounts_table(
 def table_base(week_num: int, month: int, year: int, agg_str: str):
     sleep_vals = ["Wake", "Bed", "Duration"]
 
-    select_df = aggregate_monthly_df(agg_df, month, year, week_num, agg_str)
+    select_df = filter_monthly_df(agg_df, month, year, week_num, agg_str)
 
     select_df = select_df[["name", "value", "target", "positive", "week_number"]]
     select_df["week_count"] = len(select_df["week_number"].unique())
@@ -166,6 +195,7 @@ def table_base(week_num: int, month: int, year: int, agg_str: str):
         .groupby(["name", "positive"], as_index=False)
         .agg({"value": "sum", "target": "mean", "week_count": "max"})
     )
+
     agg_week_df["target"] = agg_week_df["target"] * agg_week_df["week_count"]
 
     rating_df = select_df[select_df["name"] == "Rating"]
@@ -366,6 +396,17 @@ app.layout = dbc.Container(
             ],
             justify="around",
         ),
+        # Dropdowns
+        dbc.Row(
+            [
+                dbc.Col(html.Div(variable_dropdown(var_list)), width={"size": 3}),
+            ],
+            justify="start",
+            className="g-0",
+            style={
+                "margin-top": 25,
+            },
+        ),
     ],
     fluid=True,
     className="dbc",
@@ -375,6 +416,7 @@ if __name__ == "__main__":
     user_name = "jjm"
     data_getter = Data_Getter_Utils()
     user_config = data_getter.get_user_config(user_name)
+    var_list = []
 
     exist_data = data_getter.get_latest_file(file_prefix="exist_data")
     day_rating = Exist_Dashboard_Helpers.get_weekly_rating_df(
@@ -394,10 +436,13 @@ if __name__ == "__main__":
     agg_df = pd.concat([week_habits_df, day_rating, sleep_df]).sort_values(
         ["year", "month", "week_number"]
     )
+    agg_df = add_quarter_col(agg_df)
 
     budget_df = data_getter.get_latest_file(file_prefix="monthly_budget")
-    finance_df = data_getter.get_latest_file(file_prefix="daily_finances")
     account_df = data_getter.get_latest_file(file_prefix="account_totals")
+
+    finance_df = data_getter.get_latest_file(file_prefix="daily_finances")
+    finance_df = add_quarter_col(finance_df)
 
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
 

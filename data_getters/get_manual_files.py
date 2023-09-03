@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from data_getters.utils import Data_Getter_Utils
+from typing import Set
 
 
 class Manual_Processor:
@@ -110,7 +111,7 @@ class Manual_Dashboard_Helpers:
         avg_angle = Manual_Dashboard_Helpers.average_angle(angles)
         return Manual_Dashboard_Helpers.radians_to_time_of_day(avg_angle)
 
-    def get_avg_sleep_df(sleep_df):
+    def get_avg_sleep_df(sleep_df: pd.DataFrame):
         ret_sleep_df = sleep_df[["name", "target", "positive"]].drop_duplicates()
         avg_sleep_vals = (
             sleep_df[sleep_df["name"] != "Duration"][["name", "value"]]

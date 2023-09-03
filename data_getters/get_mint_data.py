@@ -11,7 +11,7 @@ from seleniumrequests import Firefox
 
 from data_getters.utils import Data_Getter_Utils
 from dash_files.dashboard_utils import (
-    aggregate_monthly_df,
+    filter_monthly_df,
 )
 
 
@@ -265,7 +265,7 @@ class Finances_Dashboard_Helpers:
             ~finance_df["category"].isin(remove_category_list)
         ]
         month_sum_df = (
-            regular_finances.groupby(["year", "month"])
+            regular_finances.groupby(["year", "month", "quarter"])
             .agg({"total": "sum"})
             .reset_index(drop=False)
         )
@@ -290,10 +290,11 @@ class Finances_Dashboard_Helpers:
             agg_str = "month"
 
         monthly_df = finance_df.groupby(
-            ["year", "month", "category"], as_index=False
+            ["year", "month", "quarter", "category"], as_index=False
         ).agg({"total": "sum"})
+
         monthly_df = monthly_df.merge(budget_df, how="left", on="category")
-        filter_df = aggregate_monthly_df(monthly_df, month, year, 0, agg_str)
+        filter_df = filter_monthly_df(monthly_df, month, year, 0, agg_str)
 
         filter_df["budget"] = np.where(
             np.isnan(filter_df["budget"]), 0, filter_df["budget"]

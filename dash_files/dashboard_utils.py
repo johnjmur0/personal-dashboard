@@ -5,6 +5,10 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from datetime import datetime
+from typing import List, Set
+
+
+valid_agg_vals = set(["week", "month", "quarter", "year"])
 
 
 def year_dropdown():
@@ -34,10 +38,19 @@ def week_dropdown():
     )
 
 
+def variable_dropdown(var_list: List[str]):
+    return dcc.Dropdown(
+        id="variable_dropdown",
+        options=var_list,
+        value="spending",
+        clearable=False,
+    )
+
+
 def aggregation_radio():
     return dcc.RadioItems(
         id="aggregation_radio",
-        options=["week", "month", "quarter", "year"],
+        options=list(valid_agg_vals),
         value="week",
         inline=True,
         inputStyle={
@@ -48,7 +61,7 @@ def aggregation_radio():
     )
 
 
-def aggregate_monthly_df(
+def filter_monthly_df(
     df: pd.DataFrame, month: int, year: int, week_num: int, agg_str: str
 ) -> pd.DataFrame:
     if agg_str == "week":
@@ -58,9 +71,31 @@ def aggregate_monthly_df(
     elif agg_str == "year":
         select_df = df[(df["year"] == year)]
     elif agg_str == "quarter":
-        df["date"] = pd.to_datetime(df[["year", "month"]].assign(day=1))
-        df["quarter"] = df["date"].dt.quarter
         select_quarter = list(df[(df["month"] == month)]["quarter"])[0]
         select_df = df[(df["year"] == year) & (df["quarter"] == select_quarter)]
 
     return select_df
+
+
+def get_agg_vec(agg_str: str) -> List[str]:
+    if agg_str == "week":
+        ret_vec = valid_agg_vals
+    elif agg_str == "month":
+        ret_vec = valid_agg_vals - set(["week"])
+    elif agg_str == "quarter":
+        ret_vec = valid_agg_vals - set(["week", "month"])
+    elif agg_str == "year":
+        ret_vec = valid_agg_vals - set(["week", "month", "quarter"])
+    else:
+        raise ValueError(
+            f"Unexpected agg_str {agg_str} passed. Only ','.join({valid_agg_vals}) allowed"
+        )
+
+    return list(ret_vec)
+
+
+def add_quarter_col(df: pd.DataFrame):
+    df["date"] = pd.to_datetime(df[["year", "month"]].assign(day=1))
+    df["quarter"] = df["date"].dt.quarter
+
+    return df
