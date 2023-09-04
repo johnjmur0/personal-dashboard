@@ -9,6 +9,22 @@ from typing import List, Set
 
 
 valid_agg_vals = set(["week", "month", "quarter", "year"])
+quarter_dict = {
+    1: 1,
+    2: 1,
+    3: 1,
+    4: 2,
+    5: 2,
+    6: 2,
+    7: 3,
+    8: 3,
+    9: 3,
+    10: 4,
+    11: 4,
+    12: 4,
+}
+
+timeseries_vars = ["spend", "income", "profit"]
 
 
 def year_dropdown():
@@ -38,11 +54,11 @@ def week_dropdown():
     )
 
 
-def variable_dropdown(var_list: List[str]):
+def variable_dropdown():
     return dcc.Dropdown(
         id="variable_dropdown",
-        options=var_list,
-        value="spending",
+        options=timeseries_vars,
+        value="spend",
         clearable=False,
     )
 
@@ -71,8 +87,12 @@ def filter_monthly_df(
     elif agg_str == "year":
         select_df = df[(df["year"] == year)]
     elif agg_str == "quarter":
-        select_quarter = list(df[(df["month"] == month)]["quarter"])[0]
+        select_quarter = quarter_dict[month]
         select_df = df[(df["year"] == year) & (df["quarter"] == select_quarter)]
+    else:
+        raise ValueError(
+            f"Unexpected agg_str {agg_str} passed. Only ','.join({valid_agg_vals}) allowed"
+        )
 
     return select_df
 
@@ -99,3 +119,28 @@ def add_quarter_col(df: pd.DataFrame):
     df["quarter"] = df["date"].dt.quarter
 
     return df
+
+
+def forge_datetime_col(agg_str: str, df: pd.DataFrame) -> pd.DataFrame:
+    if agg_str == "week":
+        df["datetime"] = pd.to_datetime(
+            df[["year", "month", "week"]].astype(str).agg("-".join, axis=1) + "-1",
+            format="%Y-%m-%W",
+        )
+    elif agg_str == "month":
+        df["datetime"] = pd.to_datetime(
+            df[["year", "month"]].astype(str).agg("-".join, axis=1) + "-1",
+            format="%Y-%m",
+        )
+    elif agg_str == "quarter":
+        df["datetime"] = pd.to_datetime(
+            df["year"].astype(str) + "-" + df["quarter"].astype(str), format="%Y-%q"
+        )
+    elif agg_str == "year":
+        df["datetime"] = pd.to_datetime(df["year"].astype(str), format="%Y")
+    else:
+        raise ValueError(
+            f"Unexpected agg_str {agg_str} passed. Only ','.join({valid_agg_vals}) allowed"
+        )
+
+    return df.sort_values("datetime")

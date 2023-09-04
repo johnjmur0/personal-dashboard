@@ -22,6 +22,7 @@ from dash_files.dashboard_utils import (
     aggregation_radio,
     filter_monthly_df,
     add_quarter_col,
+    forge_datetime_col,
 )
 from data_getters.utils import Data_Getter_Utils
 from data_getters.get_mint_data import Finances_Dashboard_Helpers
@@ -33,7 +34,6 @@ template_name = "superhero"
 load_figure_template(template_name)
 server = flask.Flask(__name__)
 app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
-var_list = []
 
 
 @app.callback(
@@ -43,16 +43,27 @@ var_list = []
     Input("aggregation_radio", "value"),
 )
 def monthly_finance_barchart(month: int, year: int, agg_str: str):
-    filter_df = Finances_Dashboard_Helpers.create_spend_budget_df(
+    if agg_str == "week":
+        agg_str = "month"
+
+    monthly_budget_df = Finances_Dashboard_Helpers.create_spend_budget_df(
         finance_df, budget_df, year, month, agg_str
     )
 
-    filter_df["diff"] = (filter_df["total"] - filter_df["budget"]) * -1
-    filter_df["diff"] = np.where(abs(filter_df["diff"]) == np.Inf, 0, filter_df["diff"])
-
-    filter_df["positive"] = np.where(
-        filter_df["diff"] < 0, "Under-Budget", "Over-Budget"
+    monthly_budget_df["diff"] = (
+        monthly_budget_df["total"] - monthly_budget_df["budget"]
+    ) * -1
+    monthly_budget_df["diff"] = np.where(
+        abs(monthly_budget_df["diff"]) == np.Inf, 0, monthly_budget_df["diff"]
     )
+
+    monthly_budget_df["positive"] = np.where(
+        monthly_budget_df["diff"] < 0, "Under-Budget", "Over-Budget"
+    )
+
+    filter_df = filter_monthly_df(monthly_budget_df, month, year, 0, agg_str)
+    # filter_df = filter_df[(abs(filter_df["total"]) > 100)]
+
     color_map = {"Under-Budget": "#5cb85c", "Over-Budget": "#d9534f"}
 
     fig = px.bar(
@@ -90,6 +101,7 @@ def monthly_finance_barchart(month: int, year: int, agg_str: str):
 
 @app.callback(
     Output("accounts_table", "children"),
+    Output("agg-finance-df", "data"),
     Input("profit_target", "value"),
     Input("saving_months", "value"),
     Input("month_dropdown", "value"),
@@ -123,17 +135,18 @@ def accounts_table(
 
     finance_agg_df = (
         (
-            monthly_budget_df[~monthly_budget_df["category"].isin(non_spend_categories)]
+            finance_df[~finance_df["category"].isin(non_spend_categories)]
             .groupby(agg_vec)
-            .agg({"total": "sum", "budget": "sum"})
+            .agg({"total": "sum"})
             .rename(columns={"total": "spend"})
         )
         .join(
-            monthly_budget_df[monthly_budget_df["category"].isin(income_categories)]
+            finance_df[finance_df["category"].isin(income_categories)]
             .groupby(agg_vec)
             .agg({"total": "sum"})
             .rename(columns={"total": "income"})
         )
+        .join(monthly_budget_df.groupby(agg_vec).agg({"budget": "sum"}))
         .reset_index(drop=False)
         .fillna(0)
     )
@@ -142,7 +155,7 @@ def accounts_table(
 
     filter_df = filter_monthly_df(finance_agg_df, month, year, 0, agg_str)
 
-    budget = budget_df["budget"].sum() * len(filter_df["month"].unique())
+    budget = filter_df["budget"].sum()
     spend = filter_df["spend"].sum()
 
     ret_df = pd.DataFrame(
@@ -179,7 +192,10 @@ def accounts_table(
         lambda x: [f"${y:,.0f}" for y in x] if x.name == col_name else x
     )
 
-    return dbc.Table.from_dataframe(final_df, striped=True, bordered=True, hover=True)
+    return (
+        dbc.Table.from_dataframe(final_df, striped=True, bordered=True, hover=True),
+        finance_agg_df.to_dict("records"),
+    )
 
 
 def table_base(week_num: int, month: int, year: int, agg_str: str):
@@ -272,6 +288,29 @@ def supporting_table(week_num: int, month: int, year: int, agg_str: str):
     support_df = support_df.sort_values("name")
 
     return dbc.Table.from_dataframe(support_df, striped=True, bordered=True, hover=True)
+
+
+@app.callback(
+    Output("line_graph", "figure"),
+    Input("agg-finance-df", "data"),
+    Input("variable_dropdown", "value"),
+    Input("aggregation_radio", "value"),
+)
+def selectable_line_graph(agg_finance_df: pd.DataFrame, col_name: str, agg_str: str):
+    if agg_str == "week":
+        agg_str = "month"
+
+    agg_finance_df = pd.DataFrame(agg_finance_df)
+
+    agg_finance_df = forge_datetime_col(agg_str, agg_finance_df)
+
+    line_chart = px.line(
+        agg_finance_df[["datetime", col_name]],
+        x="datetime",
+        y=col_name,
+    )
+
+    return line_chart
 
 
 app.layout = dbc.Container(
@@ -399,9 +438,26 @@ app.layout = dbc.Container(
         # Dropdowns
         dbc.Row(
             [
-                dbc.Col(html.Div(variable_dropdown(var_list)), width={"size": 3}),
+                dbc.Col(html.Div(variable_dropdown()), width={"size": 3}),
             ],
             justify="start",
+            className="g-0",
+            style={
+                "margin-top": 25,
+            },
+        ),
+        # Hidden divs for line graph
+        dbc.Row(
+            [dcc.Store(id="agg-finance-df")],
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div([dcc.Graph(id="line_graph")]),
+                    width={"size": 8},
+                ),
+            ],
+            justify="around",
             className="g-0",
             style={
                 "margin-top": 25,

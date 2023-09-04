@@ -12,6 +12,7 @@ from seleniumrequests import Firefox
 from data_getters.utils import Data_Getter_Utils
 from dash_files.dashboard_utils import (
     filter_monthly_df,
+    get_agg_vec,
 )
 
 
@@ -286,32 +287,27 @@ class Finances_Dashboard_Helpers:
         housing_payment: int = 0,
         profit_target: int = 3000,
     ):
-        if agg_str == "week":
-            agg_str = "month"
-
         monthly_df = finance_df.groupby(
             ["year", "month", "quarter", "category"], as_index=False
         ).agg({"total": "sum"})
 
         monthly_df = monthly_df.merge(budget_df, how="left", on="category")
-        filter_df = filter_monthly_df(monthly_df, month, year, 0, agg_str)
 
-        filter_df["budget"] = np.where(
-            np.isnan(filter_df["budget"]), 0, filter_df["budget"]
+        agg_vec = get_agg_vec(agg_str)
+
+        monthly_df["budget"] = np.where(
+            np.isnan(monthly_df["budget"]), 0, monthly_df["budget"]
         )
 
-        filter_df = (
-            filter_df.groupby("category")
-            .agg({"total": "sum", "budget": "sum"})
-            .reset_index(drop=False)
+        agg_monthly_df = monthly_df.groupby(["category"] + agg_vec, as_index=False).agg(
+            {"total": "sum", "budget": "sum"}
         )
 
-        filter_df = filter_df[
-            (abs(filter_df["total"]) > 100)
-            & ~(filter_df["category"].isin(["paycheck", "investments", "bonus"]))
+        agg_monthly_df = agg_monthly_df[
+            ~(agg_monthly_df["category"].isin(["paycheck", "investments", "bonus"]))
         ]
 
-        return filter_df
+        return agg_monthly_df
 
     def get_monthly_income(finance_df: pd.DataFrame, month: int, year: int):
         return finance_df[
