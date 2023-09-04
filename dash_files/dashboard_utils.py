@@ -24,7 +24,7 @@ quarter_dict = {
     12: 4,
 }
 
-timeseries_vars = ["spend", "income", "profit"]
+timeseries_vars = ["spend", "income", "profit", "category_spend"]
 
 
 def year_dropdown():
@@ -133,8 +133,10 @@ def forge_datetime_col(agg_str: str, df: pd.DataFrame) -> pd.DataFrame:
             format="%Y-%m",
         )
     elif agg_str == "quarter":
+        df["month"] = (df["quarter"] - 1) * 3 + 1
         df["datetime"] = pd.to_datetime(
-            df["year"].astype(str) + "-" + df["quarter"].astype(str), format="%Y-%q"
+            df[["year", "month"]].astype(str).agg("-".join, axis=1) + "-1",
+            format="%Y-%m",
         )
     elif agg_str == "year":
         df["datetime"] = pd.to_datetime(df["year"].astype(str), format="%Y")

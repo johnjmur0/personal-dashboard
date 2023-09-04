@@ -38,6 +38,7 @@ app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
 
 @app.callback(
     Output("monthly_finance_barchart", "figure"),
+    Output("monthly-budget-df", "data"),
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
     Input("aggregation_radio", "value"),
@@ -96,7 +97,10 @@ def monthly_finance_barchart(month: int, year: int, agg_str: str):
         },
     )
 
-    return fig
+    return (
+        fig,
+        monthly_budget_df.to_dict("records"),
+    )
 
 
 @app.callback(
@@ -293,21 +297,36 @@ def supporting_table(week_num: int, month: int, year: int, agg_str: str):
 @app.callback(
     Output("line_graph", "figure"),
     Input("agg-finance-df", "data"),
+    Input("monthly-budget-df", "data"),
     Input("variable_dropdown", "value"),
     Input("aggregation_radio", "value"),
 )
-def selectable_line_graph(agg_finance_df: pd.DataFrame, col_name: str, agg_str: str):
+def selectable_line_graph(
+    agg_finance_df: pd.DataFrame,
+    monthly_budget_df: pd.DataFrame,
+    col_name: str,
+    agg_str: str,
+):
     if agg_str == "week":
         agg_str = "month"
 
     agg_finance_df = pd.DataFrame(agg_finance_df)
+    agg_finance_df["category"] = "aggregate"
+    monthly_budget_df = pd.DataFrame(monthly_budget_df)
+    monthly_budget_df.rename(columns={"total": "category_spend"}, inplace=True)
 
     agg_finance_df = forge_datetime_col(agg_str, agg_finance_df)
+    monthly_budget_df = forge_datetime_col(agg_str, monthly_budget_df)
+
+    graph_df = agg_finance_df
+    if col_name in ["category_spend"]:
+        graph_df = monthly_budget_df
 
     line_chart = px.line(
-        agg_finance_df[["datetime", col_name]],
+        graph_df[["datetime", col_name, "category"]],
         x="datetime",
         y=col_name,
+        color="category",
     )
 
     return line_chart
@@ -448,7 +467,7 @@ app.layout = dbc.Container(
         ),
         # Hidden divs for line graph
         dbc.Row(
-            [dcc.Store(id="agg-finance-df")],
+            [dcc.Store(id="agg-finance-df"), dcc.Store(id="monthly-budget-df")],
         ),
         dbc.Row(
             [
