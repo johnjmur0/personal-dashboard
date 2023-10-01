@@ -23,6 +23,7 @@ from dash_files.dashboard_utils import (
     filter_monthly_df,
     add_quarter_col,
     forge_datetime_col,
+    timeseries_vars,
 )
 from data_getters.utils import Data_Getter_Utils
 from data_getters.get_mint_data import Finances_Dashboard_Helpers
@@ -315,12 +316,21 @@ def selectable_line_graph(
     monthly_budget_df = pd.DataFrame(monthly_budget_df)
     monthly_budget_df.rename(columns={"total": "category_spend"}, inplace=True)
 
-    agg_finance_df = forge_datetime_col(agg_str, agg_finance_df)
-    monthly_budget_df = forge_datetime_col(agg_str, monthly_budget_df)
-
     graph_df = agg_finance_df
+    agg_func = "sum"
     if col_name in ["category_spend"]:
         graph_df = monthly_budget_df
+    elif col_name not in timeseries_vars:
+        graph_df = agg_df[agg_df["name"] == col_name].rename(
+            columns={"name": "category", "value": col_name}
+        )
+
+    agg_vec = get_agg_vec(agg_str)
+    graph_df = graph_df.groupby(agg_vec + ["category"], as_index=False).agg(
+        {col_name: agg_func}
+    )
+
+    graph_df = forge_datetime_col(agg_str, graph_df)
 
     line_chart = px.line(
         graph_df[["datetime", col_name, "category"]],
@@ -331,161 +341,6 @@ def selectable_line_graph(
 
     return line_chart
 
-
-app.layout = dbc.Container(
-    [
-        # Header
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div(
-                        html.H1(children="Check-in Dashboard"),
-                        style={"width": "100%"},
-                    ),
-                    width={"size": 7},
-                ),
-                dbc.Col(
-                    html.Div(
-                        html.H1(
-                            children=datetime.datetime.now().strftime(
-                                "%m/%d/%y %a. #%V"
-                            )
-                        ),
-                        style={"width": "100%", "text-align": "right"},
-                    ),
-                    width={"size": 4},
-                ),
-            ],
-            justify="between",
-        ),
-        # Dropdowns
-        dbc.Row(
-            [
-                dbc.Col(html.Div(year_dropdown()), width={"size": 4}),
-                dbc.Col(html.Div(month_dropdown()), width={"size": 4}),
-                dbc.Col(html.Div(week_dropdown()), width={"size": 4}),
-            ],
-            justify="start",
-            className="g-0",
-        ),
-        # Aggregation Radio
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div(
-                        [
-                            html.Label("Aggregation: "),
-                            aggregation_radio(),
-                        ],
-                        style={
-                            "width": "100%",
-                            "height": 30,
-                            "display": "flex",
-                            "float": "left",
-                            "margin-bottom": 3,
-                            "margin-top": 10,
-                        },
-                    ),
-                    width="auto",
-                ),
-            ],
-            justify="center",
-            className="g-0",
-        ),
-        # Scorecard Tables
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div(id="scorecard_table_positive"),
-                ),
-                dbc.Col(
-                    html.Div(id="scorecard_table_negative"),
-                    width={"size": 6},
-                ),
-            ],
-            justify="between",
-        ),
-        # Supporting table and finance inputs
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div(id="supporting_table"),
-                    width={"size": 6},
-                ),
-                dbc.Col(
-                    html.Div(
-                        [
-                            "Savings (Months): ",
-                            dcc.Input(id="saving_months", value=8, type="number"),
-                        ]
-                    ),
-                    style={"textAlign": "right"},
-                    width={"size": 2},
-                    align="center",
-                ),
-                dbc.Col(
-                    html.Div(
-                        [
-                            "Profit Target: ",
-                            dcc.Input(
-                                id="profit_target", value=3000, type="number", step=100
-                            ),
-                        ]
-                    ),
-                    style={"textAlign": "right"},
-                    width={"size": 2},
-                    align="center",
-                ),
-            ],
-            justify="between",
-        ),
-        # Graph + accounts table
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div([dcc.Graph(id="monthly_finance_barchart")]),
-                    width={"size": 7},
-                ),
-                dbc.Col(
-                    html.Div(id="accounts_table"),
-                    width={"size": 3},
-                    align="center",
-                ),
-            ],
-            justify="around",
-        ),
-        # Dropdowns
-        dbc.Row(
-            [
-                dbc.Col(html.Div(variable_dropdown()), width={"size": 3}),
-            ],
-            justify="start",
-            className="g-0",
-            style={
-                "margin-top": 25,
-            },
-        ),
-        # Hidden divs for line graph
-        dbc.Row(
-            [dcc.Store(id="agg-finance-df"), dcc.Store(id="monthly-budget-df")],
-        ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    html.Div([dcc.Graph(id="line_graph")]),
-                    width={"size": 8},
-                ),
-            ],
-            justify="around",
-            className="g-0",
-            style={
-                "margin-top": 25,
-            },
-        ),
-    ],
-    fluid=True,
-    className="dbc",
-)
 
 if __name__ == "__main__":
     user_name = "jjm"
@@ -520,5 +375,166 @@ if __name__ == "__main__":
     finance_df = add_quarter_col(finance_df)
 
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
+
+    app.layout = dbc.Container(
+        [
+            # Header
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            html.H1(children="Check-in Dashboard"),
+                            style={"width": "100%"},
+                        ),
+                        width={"size": 7},
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            html.H1(
+                                children=datetime.datetime.now().strftime(
+                                    "%m/%d/%y %a. #%V"
+                                )
+                            ),
+                            style={"width": "100%", "text-align": "right"},
+                        ),
+                        width={"size": 4},
+                    ),
+                ],
+                justify="between",
+            ),
+            # Dropdowns
+            dbc.Row(
+                [
+                    dbc.Col(html.Div(year_dropdown()), width={"size": 4}),
+                    dbc.Col(html.Div(month_dropdown()), width={"size": 4}),
+                    dbc.Col(html.Div(week_dropdown()), width={"size": 4}),
+                ],
+                justify="start",
+                className="g-0",
+            ),
+            # Aggregation Radio
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.Label("Aggregation: "),
+                                aggregation_radio(),
+                            ],
+                            style={
+                                "width": "100%",
+                                "height": 30,
+                                "display": "flex",
+                                "float": "left",
+                                "margin-bottom": 3,
+                                "margin-top": 10,
+                            },
+                        ),
+                        width="auto",
+                    ),
+                ],
+                justify="center",
+                className="g-0",
+            ),
+            # Scorecard Tables
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(id="scorecard_table_positive"),
+                    ),
+                    dbc.Col(
+                        html.Div(id="scorecard_table_negative"),
+                        width={"size": 6},
+                    ),
+                ],
+                justify="between",
+            ),
+            # Supporting table and finance inputs
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(id="supporting_table"),
+                        width={"size": 6},
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                "Savings (Months): ",
+                                dcc.Input(id="saving_months", value=8, type="number"),
+                            ]
+                        ),
+                        style={"textAlign": "right"},
+                        width={"size": 2},
+                        align="center",
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                "Profit Target: ",
+                                dcc.Input(
+                                    id="profit_target",
+                                    value=3000,
+                                    type="number",
+                                    step=100,
+                                ),
+                            ]
+                        ),
+                        style={"textAlign": "right"},
+                        width={"size": 2},
+                        align="center",
+                    ),
+                ],
+                justify="between",
+            ),
+            # Graph + accounts table
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div([dcc.Graph(id="monthly_finance_barchart")]),
+                        width={"size": 7},
+                    ),
+                    dbc.Col(
+                        html.Div(id="accounts_table"),
+                        width={"size": 3},
+                        align="center",
+                    ),
+                ],
+                justify="around",
+            ),
+            # Dropdowns
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(variable_dropdown(list(agg_df["name"].unique()))),
+                        width={"size": 3},
+                    ),
+                ],
+                justify="start",
+                className="g-0",
+                style={
+                    "margin-top": 25,
+                },
+            ),
+            # Hidden divs for line graph
+            dbc.Row(
+                [dcc.Store(id="agg-finance-df"), dcc.Store(id="monthly-budget-df")],
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div([dcc.Graph(id="line_graph")]),
+                        width={"size": 8},
+                    ),
+                ],
+                justify="around",
+                className="g-0",
+                style={
+                    "margin-top": 25,
+                },
+            ),
+        ],
+        fluid=True,
+        className="dbc",
+    )
 
     app.run_server(debug=True)

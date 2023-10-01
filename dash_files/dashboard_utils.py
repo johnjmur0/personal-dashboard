@@ -54,10 +54,10 @@ def week_dropdown():
     )
 
 
-def variable_dropdown():
+def variable_dropdown(extra_var_list: List[str] = []):
     return dcc.Dropdown(
         id="variable_dropdown",
-        options=timeseries_vars,
+        options=timeseries_vars + extra_var_list,
         value="spend",
         clearable=False,
     )
