@@ -21,6 +21,8 @@ If you're interested, I'd be happy to help you get something working on your end
 
 But if you're a Mint, Marvin, Exist user, feel to reach out or checkout how I've processed those. Each were different.
 
+Below is an example with some made-up data
+
 P.S. I wiped the commit history b/c when I was prototying I had some config info hardcoded.
 
 Here's an example of how it looks now (with some actual data 0'd out):
