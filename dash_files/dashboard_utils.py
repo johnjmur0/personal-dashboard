@@ -33,6 +33,7 @@ def year_dropdown():
         options=list(range(datetime.now().year - 4, datetime.now().year + 1)),
         value=datetime.now().year,
         clearable=False,
+        style={"--primary-color": "black"},
     )
 
 
