@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
             Marvin_Processor.get_marvin_habit_data(user_config)
             Marvin_Processor.get_marvin_task_data(user_config)
-            Exist_Processor.get_exist_data(user_config)
+            # Exist_Processor.get_exist_data(user_config)
 
         Mint_Processor.clean_budgets(user_config, user)
         Mint_Processor.clean_accounts(user_config, user)
