@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 import pytest_asyncio
+import pandas as pd
 import math
 
 from data_getters.utils import Data_Getter_Utils
@@ -50,10 +51,52 @@ class Test_Data_Getter_System:
 
         assert len(transactions["allTransactions"]["results"]) > 1
 
-        transactions["allTransactions"]["results"][0]["tags"] in user_config["monarch_config"]["valid_tags"]
+        transactions["allTransactions"]["results"][0]["tags"] in user_config[
+            "monarch_config"
+        ]["valid_tags"]
+
+    @pytest.mark.asyncio
+    async def test_monarch_budgets(self, monarch_conn):
+
+        budgets = await Monarch_API_Getter.get_monarch_budgets(monarch_conn)
+
+        assert isinstance(budgets, dict)
+
+        assert (
+            abs(
+                budgets["budgetData"]["monthlyAmountsByCategory"][3]["monthlyAmounts"][
+                    0
+                ]["plannedCashFlowAmount"]
+            )
+            >= 0
+        )
+
+    @pytest.mark.asyncio
+    async def test_monarch_transaction_df(self, monarch_conn):
+
+        key_cols = [
+            "date",
+            "category",
+            "account",
+            "tags",
+            "amount",
+        ]
+
+        transactions_df = await Monarch_API_Getter().get_monarch_transactions_df(
+            monarch_conn
+        )
+
+        assert isinstance(transactions_df, pd.DataFrame)
+
+        assert set(transactions_df.columns) == set(key_cols)
+
+        assert len(transactions_df) > 10
+
+        assert len(transactions_df[transactions_df["amount"].isna()]) == 0
 
 
 class Test_Data_Getter_Processors:
+
     @staticmethod
     def test_mint_transactions_processing(user_config):
         transactions_df = Mint_Processor.clean_transactions(user_config)
