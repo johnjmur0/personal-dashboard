@@ -32,6 +32,7 @@ class Mint_API_Getter:
             driver=driver,
         )
 
+    @staticmethod
     def process_mint_df(mint_json_return: json, ret_cols: List[str]) -> pd.DataFrame:
         ret_df = pd.DataFrame()
 
@@ -44,7 +45,8 @@ class Mint_API_Getter:
 
         return ret_df
 
-    def expand_category_col(df, ret_cols, keep_names):
+    @staticmethod
+    def expand_category_col(df, ret_cols: List[str], keep_names: List[str]):
         df = pd.concat(
             [
                 df.drop(columns={"category"}),
@@ -53,14 +55,15 @@ class Mint_API_Getter:
             axis=1,
         )
 
-        ret_cols = set(ret_cols) - set(["category"])
-        ret_cols = list(ret_cols) + keep_names
+        ret_cols = list(set(ret_cols) - set(["category"])) + keep_names
 
         return df[ret_cols]
 
+    @staticmethod
     def close_mint_conn(mint_conn):
         mint_conn.close()
 
+    @staticmethod
     def get_accounts_df(mint_conn, user_name: str):
         accounts = mint_conn.get_account_data()
 
