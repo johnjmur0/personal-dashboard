@@ -144,7 +144,7 @@ class Test_Data_Getter_Processors:
         assert not math.isnan(budget_df["budget"].sum())
 
     @staticmethod
-    def test_monarch_transaction_processing(user_config):
+    def test_monarch_transaction_processing(user_config, user_name: str):
         transactions_df = Monarch_Processor.clean_transactions(
             user_config, user_name=user_name
         )
