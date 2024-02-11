@@ -28,7 +28,6 @@ class Data_Getter_Utils:
         user_config_data = json.load(json_file)
         return user_config_data
 
-
     @staticmethod
     def write_temp_cache(df, data_name: str):
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -58,3 +57,29 @@ class Data_Getter_Utils:
     def get_existing_cache(self):
 
         return glob.glob(f"{self.cache_dir}/*.csv")
+
+    def category_dict_to_df(category_dict: dict):
+        category_df = pd.melt(
+            pd.DataFrame(dict([(k, pd.Series(v)) for k, v in category_dict.items()]))
+        )
+
+        category_df.rename(
+            columns={"variable": "category", "value": "name"},
+            inplace=True,
+        )
+
+        category_df = category_df[~pd.isnull(category_df["name"])]
+
+        return category_df
+
+    def get_budget_category_df(user_config: dict, budget_type: str = "monarch"):
+        agg_categories_df = Data_Getter_Utils.category_dict_to_df(
+            user_config[f"{budget_type}_aggregate_categories"]
+        )
+        meta_categories_df = Data_Getter_Utils.category_dict_to_df(
+            user_config["meta_categories"]
+        )
+
+        return meta_categories_df.rename(
+            columns={"category": "meta_category", "name": "category"}
+        ).merge(agg_categories_df, on="category")

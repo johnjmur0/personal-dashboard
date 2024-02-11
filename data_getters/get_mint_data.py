@@ -135,31 +135,6 @@ class Mint_API_Getter:
 
 
 class Mint_Processor:
-    def category_dict_to_df(category_dict: dict):
-        category_df = pd.melt(
-            pd.DataFrame(dict([(k, pd.Series(v)) for k, v in category_dict.items()]))
-        )
-
-        category_df.rename(
-            columns={"variable": "category", "value": "name"},
-            inplace=True,
-        )
-
-        category_df = category_df[~pd.isnull(category_df["name"])]
-
-        return category_df
-
-    def get_category_df(user_config: dict):
-        agg_categories_df = Mint_Processor.category_dict_to_df(
-            user_config["aggregate_categories"]
-        )
-        meta_categories_df = Mint_Processor.category_dict_to_df(
-            user_config["meta_categories"]
-        )
-
-        return meta_categories_df.rename(
-            columns={"category": "meta_category", "name": "category"}
-        ).merge(agg_categories_df, on="category")
 
     def clean_budgets(user_config: dict, user_name: str):
         raw_budgets_df = (
@@ -173,7 +148,7 @@ class Mint_Processor:
             raw_budgets_df["budgetDate"] == max(raw_budgets_df["budgetDate"])
         ]
 
-        category_df = Mint_Processor.get_category_df(user_config)
+        category_df = Data_Getter_Utils.get_budget_category_df(user_config)
 
         agg_budgets_df = (
             raw_budgets_df.merge(category_df, on="name")
@@ -211,7 +186,7 @@ class Mint_Processor:
         raw_transactions_df["month"] = raw_transactions_df["date"].dt.month
         raw_transactions_df["day"] = raw_transactions_df["date"].dt.day
 
-        category_df = Mint_Processor.get_category_df(user_config)
+        category_df = Data_Getter_Utils.get_budget_category_df(user_config)
 
         agg_transactions_df = (
             raw_transactions_df.merge(category_df, on="name")

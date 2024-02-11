@@ -7,12 +7,17 @@ import math
 from data_getters.utils import Data_Getter_Utils
 from data_getters.get_marvin_data import Marvin_Processor
 from data_getters.get_mint_data import Mint_API_Getter, Mint_Processor
-from data_getters.get_monarch_data import Monarch_API_Getter
+from data_getters.get_monarch_data import Monarch_API_Getter, Monarch_Processor
 
 
 @pytest.fixture(scope="session")
-def user_config():
-    yield Data_Getter_Utils.get_user_config("jjm")
+def user_name():
+    yield "jjm"
+
+
+@pytest.fixture(scope="session")
+def user_config(user_name: str):
+    yield Data_Getter_Utils.get_user_config(user_name)
 
 
 class Test_Data_Getter_System:
@@ -94,16 +99,59 @@ class Test_Data_Getter_System:
 
         assert len(transactions_df[transactions_df["amount"].isna()]) == 0
 
+    @pytest.mark.asycio
+    async def test_monarch_budgets_df(self, monarch_conn, user_name):
+
+        key_cols = ["meta_id", "meta_name", "type", "id", "name", "budgetAmount"]
+
+        budget_df = await Monarch_API_Getter().get_monarch_budgets_df(
+            monarch_conn, user_name=user_name
+        )
+
+        assert isinstance(budget_df, pd.DataFrame)
+
+        assert set(budget_df.columns) == set(key_cols)
+
+        assert len(budget_df) > 10
+
+        assert len(budget_df[budget_df["budgetAmount"].isna()]) == 0
+
 
 class Test_Data_Getter_Processors:
 
     @staticmethod
-    def test_mint_transactions_processing(user_config):
-        transactions_df = Mint_Processor.clean_transactions(user_config)
+    def test_mint_transactions_processing(user_config, user_name):
+        transactions_df = Mint_Processor.clean_transactions(
+            user_config, user_name=user_name
+        )
 
         assert len(transactions_df) > 100
 
-        expected_cols = ["year", "month", "category", "amount"]
+        expected_cols = ["category", "day", "month", "timestamp", "total", "year"]
         assert set(expected_cols) <= set(transactions_df.columns)
 
-        assert not math.isnan(transactions_df["amount"].sum())
+        assert not math.isnan(transactions_df["total"].sum())
+
+    @staticmethod
+    def test_monarch_budget_processing(user_config, user_name):
+        budget_df = Monarch_Processor.clean_budgets(user_config, user_name=user_name)
+
+        assert len(budget_df) > 5
+
+        expected_cols = ["category", "budget"]
+        assert set(expected_cols) == set(budget_df.columns)
+
+        assert not math.isnan(budget_df["budget"].sum())
+
+    @staticmethod
+    def test_monarch_transaction_processing(user_config):
+        transactions_df = Monarch_Processor.clean_transactions(
+            user_config, user_name=user_name
+        )
+
+        assert len(transactions_df) > 100
+
+        expected_cols = ["category", "day", "month", "timestamp", "total", "year"]
+        assert set(expected_cols) <= set(transactions_df.columns)
+
+        assert not math.isnan(transactions_df["total"].sum())
