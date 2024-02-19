@@ -20,6 +20,7 @@ from dash_files.dashboard_utils import (
     variable_dropdown,
     get_agg_vec,
     aggregation_radio,
+    finance_tags_radio,
     filter_monthly_df,
     add_quarter_col,
     forge_datetime_col,
@@ -43,13 +44,15 @@ app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.SUPERHERO])
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
     Input("aggregation_radio", "value"),
+    Input("finance_tags_radio", "value"),
 )
-def monthly_finance_barchart(month: int, year: int, agg_str: str):
+def monthly_finance_barchart(month: int, year: int, agg_str: str, tags_str: str):
     if agg_str == "week":
         agg_str = "month"
 
+    tag_finance_df = finance_df[finance_df["tags"] == tags_str]
     monthly_budget_df = Finances_Dashboard_Helpers.create_spend_budget_df(
-        finance_df, budget_df, year, month, agg_str
+        tag_finance_df, budget_df, year, month, agg_str
     )
 
     monthly_budget_df["diff"] = (
@@ -112,6 +115,7 @@ def monthly_finance_barchart(month: int, year: int, agg_str: str):
     Input("month_dropdown", "value"),
     Input("year_dropdown", "value"),
     Input("aggregation_radio", "value"),
+    Input("finance_tags_radio", "value"),
 )
 def accounts_table(
     profit_target: int,
@@ -119,16 +123,24 @@ def accounts_table(
     month: int,
     year: int,
     agg_str: str,
+    tag_str: str,
     historical_start_year: int = 2022,
 ):
+
+    tag_account_df = account_df[account_df["tags"] == tag_str].drop(columns=["tags"])
+
+    tag_finance_df = finance_df[finance_df["tags"] == tag_str].drop(columns=["tags"])
+
     pivot_account_df = pd.pivot_table(
-        account_df[["account_type", "total"]], values="total", columns=["account_type"]
+        tag_account_df[["account_type", "total"]],
+        values="total",
+        columns=["account_type"],
     )
 
     if agg_str == "week":
         agg_str = "month"
 
-    monthly_budget_df = finance_df.groupby(
+    monthly_budget_df = tag_finance_df.groupby(
         ["year", "quarter", "month"], as_index=False
     ).agg({"total": "sum"})
     monthly_budget_df["budget"] = budget_df["budget"].sum()
@@ -140,13 +152,13 @@ def accounts_table(
 
     finance_agg_df = (
         (
-            finance_df[~finance_df["category"].isin(non_spend_categories)]
+            tag_finance_df[~tag_finance_df["category"].isin(non_spend_categories)]
             .groupby(agg_vec)
             .agg({"total": "sum"})
             .rename(columns={"total": "spend"})
         )
         .join(
-            finance_df[finance_df["category"].isin(income_categories)]
+            tag_finance_df[tag_finance_df["category"].isin(income_categories)]
             .groupby(agg_vec)
             .agg({"total": "sum"})
             .rename(columns={"total": "income"})
@@ -180,8 +192,8 @@ def accounts_table(
     )
 
     final_cols = [
-        "bank",
-        "investment",
+        "cash",
+        "investments",
         "paycheck",
         "spending",
         "budget",
@@ -301,17 +313,21 @@ def supporting_table(week_num: int, month: int, year: int, agg_str: str):
     Input("monthly-budget-df", "data"),
     Input("variable_dropdown", "value"),
     Input("aggregation_radio", "value"),
+    Input("finance_tags_radio", "value"),
 )
 def selectable_line_graph(
     agg_finance_df: pd.DataFrame,
     monthly_budget_df: pd.DataFrame,
     col_name: str,
     agg_str: str,
+    finance_tags_str: str,
 ):
     if agg_str == "week":
         agg_str = "month"
 
     agg_finance_df = pd.DataFrame(agg_finance_df)
+    # tags_finance_df = agg_finance_df[agg_finance_df["tags"] == finance_tags_str]
+
     agg_finance_df["category"] = "aggregate"
     monthly_budget_df = pd.DataFrame(monthly_budget_df)
     monthly_budget_df.rename(columns={"total": "category_spend"}, inplace=True)
@@ -374,6 +390,8 @@ if __name__ == "__main__":
     finance_df = data_getter.get_latest_file(file_prefix="daily_finances")
     finance_df = add_quarter_col(finance_df)
 
+    finance_tags = list(finance_df["tags"].unique())
+
     month_sum_df = Finances_Dashboard_Helpers.get_month_sum_df(finance_df)
 
     app.layout = dbc.Container(
@@ -432,9 +450,25 @@ if __name__ == "__main__":
                         ),
                         width="auto",
                     ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.Label("Finance Tag: "),
+                                finance_tags_radio(finance_tags),
+                            ],
+                            style={
+                                "width": "100%",
+                                "height": 30,
+                                "display": "flex",
+                                "float": "right",
+                                "margin-bottom": 3,
+                                "margin-top": 10,
+                            },
+                        ),
+                        width="auto",
+                    ),
                 ],
-                justify="center",
-                className="g-0",
+                justify="between",
             ),
             # Scorecard Tables
             dbc.Row(

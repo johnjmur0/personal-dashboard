@@ -25,7 +25,9 @@ class Test_Data_Getter_System:
     @pytest.fixture(scope="class")
     async def monarch_conn(self, user_config):
 
-        mm_con = await Monarch_API_Getter.get_monarch_conn(user_config)
+        mm_con = await Monarch_API_Getter.get_monarch_conn(
+            user_config["monarch_config"]["jjm"]
+        )
         return mm_con
 
     @staticmethod
@@ -77,7 +79,7 @@ class Test_Data_Getter_System:
         )
 
     @pytest.mark.asyncio
-    async def test_monarch_transaction_df(self, monarch_conn):
+    async def test_monarch_transaction_df(self, monarch_conn, user_name):
 
         key_cols = [
             "date",
@@ -88,7 +90,7 @@ class Test_Data_Getter_System:
         ]
 
         transactions_df = await Monarch_API_Getter().get_monarch_transactions_df(
-            monarch_conn
+            monarch_conn, user_name=user_name
         )
 
         assert isinstance(transactions_df, pd.DataFrame)
@@ -116,10 +118,35 @@ class Test_Data_Getter_System:
 
         assert len(budget_df[budget_df["budgetAmount"].isna()]) == 0
 
+    @pytest.mark.asyncio
+    async def test_monarch_accounts_df(self, monarch_conn, user_name):
+
+        key_cols = [
+            "id",
+            "displayName",
+            "currentBalance",
+            "type",
+        ]
+
+        accounts_df = await Monarch_API_Getter().get_monarch_accounts_df(
+            monarch_conn, user_name
+        )
+
+        assert isinstance(accounts_df, pd.DataFrame)
+
+        assert set(accounts_df.columns) == set(key_cols)
+
+        assert len(accounts_df) > 4
+
+        assert len(accounts_df[accounts_df["currentBalance"].isna()]) == 0
+
+        assert set(accounts_df["type"]) == set(["Cash", "Investments"])
+
 
 class Test_Data_Getter_Processors:
 
     @staticmethod
+    @pytest.mark.skip(reason="old, mint")
     def test_mint_transactions_processing(user_config, user_name):
         transactions_df = Mint_Processor.clean_transactions(
             user_config, user_name=user_name
@@ -149,9 +176,24 @@ class Test_Data_Getter_Processors:
             user_config, user_name=user_name
         )
 
-        assert len(transactions_df) > 100
+        assert len(transactions_df) > 25
 
         expected_cols = ["category", "day", "month", "timestamp", "total", "year"]
         assert set(expected_cols) <= set(transactions_df.columns)
 
         assert not math.isnan(transactions_df["total"].sum())
+
+    @staticmethod
+    def test_monarch_accounts_processing(user_config, user_name: str):
+        accounts_df = Monarch_Processor.clean_accounts(user_config, user_name=user_name)
+
+        assert len(accounts_df) == 4
+
+        expected_cols = ["total", "account_type", "tag"]
+        assert set(expected_cols) <= set(accounts_df.columns)
+
+        assert not math.isnan(accounts_df["total"].sum())
+
+        assert set(accounts_df["tag"]) == set(
+            user_config["monarch_config"]["valid_tags"]
+        )

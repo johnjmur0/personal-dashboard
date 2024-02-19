@@ -77,6 +77,18 @@ def aggregation_radio():
         },
     )
 
+def finance_tags_radio(tags_list: List[str]):
+  return dcc.RadioItems(
+        id="finance_tags_radio",
+        options=tags_list,
+        value=tags_list[0],
+        inline=True,
+        inputStyle={
+            "margin-right": "3px",
+            "margin-left": "7px",
+            "margin-top": "3px",
+        },
+    )
 
 def filter_monthly_df(
     df: pd.DataFrame, month: int, year: int, week_num: int, agg_str: str
